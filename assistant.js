@@ -6,7 +6,8 @@
  * enables the assistant toggle in Streamline's settings.
  */
 
-import { getRequestHeaders, extension_settings } from '../../../../script.js';
+import { getRequestHeaders } from '../../../../script.js';
+import { extension_settings } from '../../../extensions.js';
 import { model_list, getChatCompletionModel, chat_completion_sources } from '../../../openai.js';
 import { getContext } from '../../../st-context.js';
 import { KNOWLEDGE_BASE } from './knowledge.js';
