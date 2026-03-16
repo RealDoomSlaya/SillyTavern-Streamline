@@ -4,6 +4,7 @@ import { promptManager, model_list, getChatCompletionModel } from '../../../open
 
 const MODULE_NAME = 'third-party/Streamline';
 const SETTINGS_KEY = 'streamline';
+const VERSION = '0.3.0';
 
 // =====================================================================
 // Default Settings
@@ -37,6 +38,8 @@ const defaultSettings = {
     _pmPreserved: {},
     // Phase 2.5 — Whether PM fields have been soft-disabled
     _pmFieldsDisabled: false,
+    // Persisted context size — survives preset changes and reloads
+    _contextSize: null,
 };
 
 // Keys that are toggle-type (checkbox) settings
@@ -339,9 +342,12 @@ function setPMFieldStates(stateMap) {
 function disablePMFields() {
     const settings = extension_settings[SETTINGS_KEY];
 
-    const currentStates = readPMFieldStates();
-    if (Object.keys(currentStates).length > 0) {
-        settings._pmPreserved = currentStates;
+    // Only preserve if we haven't already (idempotent — safe to click multiple times)
+    if (!settings._pmFieldsDisabled) {
+        const currentStates = readPMFieldStates();
+        if (Object.keys(currentStates).length > 0) {
+            settings._pmPreserved = currentStates;
+        }
     }
 
     const newStates = {};
@@ -772,6 +778,13 @@ function writeSTContextSize(value) {
     if ($counter.length) {
         $counter.val(value).trigger('input');
     }
+
+    // Persist the user's context choice so it survives preset changes and reloads
+    const settings = extension_settings[SETTINGS_KEY];
+    if (settings) {
+        settings._contextSize = value;
+        saveSettingsDebounced();
+    }
 }
 
 function formatContextSize(size) {
@@ -821,8 +834,33 @@ function initContextControls() {
     $(document).on('input', '#openai_max_context, #openai_max_context_counter', updateContextDisplay);
 
     // Event-driven sync
-    eventSource.on(event_types.SETTINGS_LOADED, updateContextDisplay);
-    eventSource.on(event_types.OAI_PRESET_CHANGED_AFTER, updateContextDisplay);
+    eventSource.on(event_types.SETTINGS_LOADED, () => {
+        reapplyPersistedContext();
+        updateContextDisplay();
+    });
+    eventSource.on(event_types.OAI_PRESET_CHANGED_AFTER, () => {
+        // Preset may have reset context to a low value — re-apply our persisted choice
+        reapplyPersistedContext();
+        updateContextDisplay();
+    });
+}
+
+/**
+ * Re-apply the user's persisted context size if a preset or reload
+ * has reset it to a low value.
+ */
+function reapplyPersistedContext() {
+    const settings = extension_settings[SETTINGS_KEY];
+    if (!settings?._contextSize) return;
+
+    const current = readSTContextSize();
+    const saved = settings._contextSize;
+
+    // Only re-apply if preset/reload reverted to a low default
+    if (current <= 4096 && saved > 4096) {
+        console.log(`[Streamline] Re-applying persisted context: ${saved} (was reset to ${current})`);
+        writeSTContextSize(saved);
+    }
 }
 
 // =====================================================================
@@ -1027,11 +1065,12 @@ jQuery(async function () {
             $streamToggle.prop('checked', true).trigger('input');
         }
 
-        // Set context size to 128k if currently at a low default (≤ 4096)
+        // Set context size using model detection, fallback to 128k
         // This prevents "Mandatory prompts exceed the context size" errors
         const currentContext = readSTContextSize();
         if (currentContext <= 4096) {
-            writeSTContextSize(128000);
+            const detected = detectModelContextSize();
+            writeSTContextSize(detected || 128000);
             updateContextDisplay();
         }
     });
@@ -1045,6 +1084,9 @@ jQuery(async function () {
     // Load saved settings and apply hide classes immediately
     // (CSS classes don't depend on ST's settings being loaded)
     loadSettings();
+
+    // Display version in the drawer header
+    $('#streamline_version').text(`v${VERSION}`);
 
     // Initialize all simplified controls and system prompt shortcut
     // (these register event listeners that will fire when ST is ready)
