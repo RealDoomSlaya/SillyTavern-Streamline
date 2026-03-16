@@ -625,12 +625,14 @@ function initSystemPromptShortcut() {
     // When user types in Streamline's field, push to PM data model
     $streamlinePrompt.on('input', function () {
         writeMainPromptContent(this.value);
+        updateGMHint();
     });
 
     // When ST's quick-edit textarea changes (user edited it directly),
     // pull into our field
     $(document).on('input', '#main_prompt_quick_edit_textarea', function () {
         $streamlinePrompt.val(this.value);
+        updateGMHint();
     });
 
     // Sync when the Streamline drawer is opened
@@ -1092,6 +1094,46 @@ function applyGMMode() {
     }
 }
 
+/**
+ * Analyze the user's system prompt and update the GM Mode hint.
+ * Shows contextual guidance:
+ * - Empty prompt → suggest enabling GM Mode
+ * - Chatbot-style prompt → suggest GM Mode to reframe
+ * - Already has GM/narrator framing → note GM Mode is redundant
+ */
+function updateGMHint() {
+    const $hint = $('#streamline_gm_detection_hint');
+    if (!$hint.length) return;
+
+    const prompt = readMainPromptContent().toLowerCase();
+    const gmEnabled = !!extension_settings[SETTINGS_KEY]?._gmEnabled;
+
+    // Keywords that indicate GM/narrator framing already exists
+    const gmKeywords = ['game master', 'narrator', 'narrate', 'dungeon master', 'you control the world',
+        'you are the gm', 'you are the dm', 'npc', 'player character', 'player\'s character',
+        'player agency', 'non-player character'];
+
+    // Keywords that suggest chatbot-style usage
+    const chatbotKeywords = ['you are a helpful', 'you are an ai', 'as an assistant',
+        'you are a chatbot', 'respond to the user', 'answer questions'];
+
+    const hasGMFraming = gmKeywords.some(kw => prompt.includes(kw));
+    const hasChatbotFraming = chatbotKeywords.some(kw => prompt.includes(kw));
+    const isEmpty = prompt.trim().length < 20;
+
+    if (isEmpty && !gmEnabled) {
+        $hint.html('<i class="fa-solid fa-lightbulb"></i> No system prompt detected. GM Mode will give the AI a foundation to work from — recommended for narrative RP.').show();
+    } else if (hasChatbotFraming && !gmEnabled) {
+        $hint.html('<i class="fa-solid fa-triangle-exclamation"></i> Your system prompt looks chatbot-oriented. Enable GM Mode to reframe the AI as a narrator/game master instead.').show();
+    } else if (hasGMFraming && gmEnabled) {
+        $hint.html('<i class="fa-solid fa-circle-check"></i> Your system prompt already has GM/narrator framing. GM Mode is active but redundant — you can disable it to save tokens.').show();
+    } else if (hasGMFraming && !gmEnabled) {
+        $hint.html('<i class="fa-solid fa-circle-check"></i> Your system prompt already establishes a GM/narrator role. GM Mode not needed.').show();
+    } else {
+        $hint.hide();
+    }
+}
+
 function applyBubbleColor(who, hexColor) {
     const root = document.documentElement;
     if (who === 'user') {
@@ -1279,6 +1321,7 @@ jQuery(async function () {
         extension_settings[SETTINGS_KEY]._gmEnabled = enabled;
         $('#streamline_gm_prompt_section').toggle(enabled);
         applyGMMode();
+        updateGMHint();
         saveSettingsDebounced();
     });
 
@@ -1331,6 +1374,8 @@ jQuery(async function () {
         syncResponseLengthFromST();
         updateContextDisplay();
         syncSystemPromptFromPM();
+        // Update GM Mode hint now that prompt is loaded
+        updateGMHint();
         // Try to detect model context on startup (model_list may already be populated)
         autoApplyModelContext();
     });

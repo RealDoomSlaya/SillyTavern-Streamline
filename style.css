@@ -320,6 +320,15 @@ body.streamline--hide-group-chat #group-metadata-controls {
     margin-bottom: 4px;
 }
 
+#streamline_settings .streamline-gm-hint {
+    opacity: 0.85;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border-left: 3px solid var(--SmartThemeQuoteColor, #5a8fd4);
+    font-style: normal;
+}
+
 #streamline_settings hr {
     margin: 8px 0;
     border: none;
