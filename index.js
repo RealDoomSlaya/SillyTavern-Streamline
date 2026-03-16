@@ -9,6 +9,22 @@ const GM_INJECTION_KEY = 'streamline_gm_mode';
 const VERSION = '0.4.0';
 
 // =====================================================================
+// Logging
+// =====================================================================
+
+const LOG_PREFIX = `[Streamline v${VERSION}]`;
+const log = {
+    info:  (...args) => console.log(LOG_PREFIX, ...args),
+    warn:  (...args) => console.warn(LOG_PREFIX, ...args),
+    error: (...args) => console.error(LOG_PREFIX, ...args),
+    debug: (...args) => {
+        if (extension_settings[SETTINGS_KEY]?._debug) console.debug(LOG_PREFIX, '[DEBUG]', ...args);
+    },
+    /** Log a state change — key/value pairs for what changed */
+    state: (action, details) => console.log(LOG_PREFIX, `[${action}]`, details),
+};
+
+// =====================================================================
 // Default Settings
 // =====================================================================
 
@@ -50,6 +66,8 @@ const defaultSettings = {
     // GM Mode
     _gmEnabled: false,
     _gmPrompt: null, // null = use default
+    // Debug logging (verbose output to browser console)
+    _debug: false,
 };
 
 // =====================================================================
@@ -433,6 +451,9 @@ function reapplyActiveNeutralizations() {
     const settings = extension_settings[SETTINGS_KEY];
     if (!settings) return;
 
+    const activeKeys = [...ALL_NEUTRALIZE_KEYS].filter(k => settings[k]);
+    log.debug('Re-applying neutralizations:', activeKeys);
+
     for (const key of ALL_NEUTRALIZE_KEYS) {
         if (settings[key]) {
             neutralize(key);
@@ -516,16 +537,19 @@ function loadSettings() {
 }
 
 function onToggleChange(key, value) {
+    log.state('Toggle', `${key} → ${value ? 'ON' : 'OFF'}`);
     extension_settings[SETTINGS_KEY][key] = value;
 
     if (ALL_NEUTRALIZE_KEYS.has(key)) {
         if (value) {
             preserveValue(key);
             neutralize(key);
+            log.debug(`Neutralized: ${key}`);
         } else {
             const restored = restoreValue(key);
             if (restored) {
                 showRestoreNote(key);
+                log.debug(`Restored: ${key}`);
             }
         }
     }
@@ -881,7 +905,7 @@ function reapplyPersistedContext() {
 
     // Only re-apply if preset/reload reverted to a low default
     if (current <= 4096 && saved > 4096) {
-        console.log(`[Streamline] Re-applying persisted context: ${saved} (was reset to ${current})`);
+        log.info(`Re-applying persisted context: ${saved} (was reset to ${current})`);
         writeSTContextSize(saved);
     }
 }
@@ -952,7 +976,7 @@ function detectModelContextSize() {
                     || modelInfo.max_context_length
                     || modelInfo.max_model_len;
                 if (ctx && ctx > 0) {
-                    console.log(`[Streamline] Detected context size from model_list: ${modelId} → ${ctx}`);
+                    log.debug(`Context from model_list: ${modelId} → ${ctx}`);
                     return ctx;
                 }
             }
@@ -962,15 +986,15 @@ function detectModelContextSize() {
         const modelLower = modelId.toLowerCase();
         for (const [pattern, ctx] of Object.entries(MODEL_CONTEXT_FALLBACKS)) {
             if (modelLower.includes(pattern.toLowerCase())) {
-                console.log(`[Streamline] Matched context size from fallback: ${modelId} → ${ctx} (pattern: ${pattern})`);
+                log.debug(`Context from fallback: ${modelId} → ${ctx} (pattern: ${pattern})`);
                 return ctx;
             }
         }
 
-        console.log(`[Streamline] No context size detected for model: ${modelId}`);
+        log.debug(`No context size detected for model: ${modelId}`);
         return null;
     } catch (e) {
-        console.warn('[Streamline] Error detecting model context:', e.message);
+        log.warn('Error detecting model context:', e.message);
         return null;
     }
 }
@@ -1013,7 +1037,7 @@ function autoApplyModelContext() {
     if (current <= 4096) {
         writeSTContextSize(detected);
         updateContextDisplay();
-        console.log(`[Streamline] Auto-set context to ${detected} for ${modelName}`);
+        log.info(`Auto-set context to ${detected} for ${modelName}`);
 
         // Show brief notification
         const $display = $('#streamline_context_display');
@@ -1081,7 +1105,7 @@ function applyGMMode() {
             false,      // scan (don't include in world info scan)
             extension_prompt_roles.SYSTEM,
         );
-        console.log('[Streamline] GM Mode ON — injection active');
+        log.state('GM Mode', 'ON — injection active');
     } else {
         // Clear the injection by setting empty value
         setExtensionPrompt(
@@ -1090,7 +1114,7 @@ function applyGMMode() {
             extension_prompt_types.NONE,
             0,
         );
-        console.log('[Streamline] GM Mode OFF — injection cleared');
+        log.state('GM Mode', 'OFF — injection cleared');
     }
 }
 
@@ -1192,6 +1216,7 @@ jQuery(async function () {
 
     // Quick action: Apply Narrative Defaults
     $('#streamline_apply_narrative_defaults').on('click', () => {
+        log.state('Quick Action', 'Apply Narrative Defaults');
         setAllToggles(true);
         disablePMFields();
 
@@ -1219,6 +1244,7 @@ jQuery(async function () {
 
     // Quick action: Reset All
     $('#streamline_reset_all').on('click', () => {
+        log.state('Quick Action', 'Reset All');
         setAllToggles(false);
         restorePMFields();
 
@@ -1301,6 +1327,14 @@ jQuery(async function () {
         saveSettingsDebounced();
     });
 
+    // ---- Debug Logging ----
+    $('#streamline_debug').prop('checked', !!extension_settings[SETTINGS_KEY]._debug);
+    $('#streamline_debug').on('change', function () {
+        extension_settings[SETTINGS_KEY]._debug = !!this.checked;
+        saveSettingsDebounced();
+        log.info(`Debug logging ${this.checked ? 'enabled' : 'disabled'}`);
+    });
+
     // ---- GM Mode ----
 
     const gmEnabled = !!extension_settings[SETTINGS_KEY]._gmEnabled;
@@ -1354,20 +1388,20 @@ jQuery(async function () {
     // SETTINGS_LOADED: ST has finished loading all settings.
     // Re-apply neutralizations that may have been overwritten by ST's load.
     eventSource.on(event_types.SETTINGS_LOADED, () => {
-        console.log('[Streamline] SETTINGS_LOADED — re-applying active neutralizations');
+        log.info('SETTINGS_LOADED — re-applying active neutralizations');
         reapplyActiveNeutralizations();
     });
 
     // OAI_PRESET_CHANGED_AFTER: A preset was loaded, which may have
     // re-enabled instruct mode, changed context template, etc.
     eventSource.on(event_types.OAI_PRESET_CHANGED_AFTER, () => {
-        console.log('[Streamline] OAI_PRESET_CHANGED_AFTER — re-applying active neutralizations');
+        log.info('OAI_PRESET_CHANGED_AFTER — re-applying active neutralizations');
         reapplyActiveNeutralizations();
     });
 
     // APP_READY: The app is fully initialized. Apply one-time defaults.
     eventSource.on(event_types.APP_READY, () => {
-        console.log('[Streamline] APP_READY — applying one-time defaults');
+        log.info('APP_READY — applying one-time defaults');
         ensureStreamingDefault();
         // Do an initial sync of simplified controls now that DOM is fully ready
         syncCreativityFromST();
@@ -1383,18 +1417,18 @@ jQuery(async function () {
     // Model-aware auto-configuration: when user changes model or API source,
     // detect the new model's context window and auto-apply if needed.
     eventSource.on(event_types.CHATCOMPLETION_MODEL_CHANGED, (newModel) => {
-        console.log(`[Streamline] Model changed to: ${newModel}`);
+        log.info(`Model changed to: ${newModel}`);
         // Small delay to let model_list update
         setTimeout(() => autoApplyModelContext(), 500);
     });
 
     eventSource.on(event_types.CHATCOMPLETION_SOURCE_CHANGED, (newSource) => {
-        console.log(`[Streamline] CC source changed to: ${newSource}`);
+        log.info(`CC source changed to: ${newSource}`);
         // Source change may clear model_list; context will update when model is selected
         updateModelInfoDisplay(null, null);
     });
 
-    console.log('[Streamline] Extension initialized, waiting for ST events.');
+    log.info('Extension initialized, waiting for ST events.');
 });
 
 export { MODULE_NAME };

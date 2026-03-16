@@ -6,9 +6,19 @@
  * enables the assistant toggle in Streamline's settings.
  */
 
-import { getRequestHeaders } from '../../../../script.js';
+import { getRequestHeaders, extension_settings } from '../../../../script.js';
 import { model_list, getChatCompletionModel, chat_completion_sources } from '../../../openai.js';
 import { getContext } from '../../../st-context.js';
+
+const ALOG_PREFIX = '[Streamline Assistant]';
+const alog = {
+    info:  (...args) => console.log(ALOG_PREFIX, ...args),
+    warn:  (...args) => console.warn(ALOG_PREFIX, ...args),
+    error: (...args) => console.error(ALOG_PREFIX, ...args),
+    debug: (...args) => {
+        if (extension_settings?.streamline?._debug) console.debug(ALOG_PREFIX, '[DEBUG]', ...args);
+    },
+};
 
 // =====================================================================
 // System Prompt
@@ -193,6 +203,11 @@ async function sendToAPI(messages, signal, onChunk) {
     if (settings?.reasoning_effort) {
         requestData.reasoning_effort = settings.reasoning_effort;
     }
+
+    alog.debug(`Sending to API — source: ${source}, model: ${model}, features:`, {
+        web_search: !!requestData.enable_web_search,
+        reasoning: !!requestData.include_reasoning,
+    });
 
     const response = await fetch('/api/backends/chat-completions/generate', {
         method: 'POST',
@@ -410,7 +425,7 @@ async function sendUserMessage() {
         if (error.name === 'AbortError') {
             $aiMsg.html('<em>Cancelled</em>');
         } else {
-            console.error('[Streamline Assistant] API error:', error);
+            alog.error('API error:', error);
             $aiMsg.removeClass('streamline-assistant-msg-pending')
                 .html(`<span style="color: var(--SmartThemeQuoteColor, #e74c3c);">Error: ${escapeHtml(error.message)}</span>`);
         }
