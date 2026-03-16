@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Streamline-v0.2.5-blue?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/Streamline-v0.4.0-blue?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/SillyTavern-1.15.0+-green?style=for-the-badge" alt="ST Compatibility">
   <img src="https://img.shields.io/badge/License-AGPL--3.0-purple?style=for-the-badge" alt="License">
   <img src="https://img.shields.io/badge/API-Cloud%20CC-orange?style=for-the-badge" alt="Target API">
@@ -27,6 +27,27 @@ SillyTavern is powerful. It's also overwhelming. Dozens of toggles, fields, and 
 ---
 
 ## Features
+
+### GM Mode
+
+A single toggle that shifts the AI from chatbot to narrator/game master. When enabled, Streamline injects a base GM framing prompt before your system prompt — establishing that the AI controls the world and NPCs while the player's agency is absolute.
+
+- **Editable** — customize the GM framing to match your style
+- **Non-overriding** — your system prompt layers on top and has the final word
+- **Smart detection** — analyzes your system prompt and tells you if GM Mode is needed, redundant, or recommended
+- **Visible in Prompt Inspector** so you can verify exactly what's being sent
+- Auto-enabled by "Apply Narrative Defaults", auto-disabled by "Reset All"
+
+### Streamline Assistant
+
+A built-in AI assistant that helps configure SillyTavern and its extensions. Uses your connected API — no additional setup required.
+
+- Floating chat window with drag support, accessible from any screen
+- Reads your installed extensions, API connection, and active Streamline settings
+- Passes through web search, reasoning, and other API features you have enabled
+- Customizable chat bubble colors
+- Understands Streamline's philosophy — won't suggest legacy features or contradict your workflow
+- Opt-in via toggle in settings (off by default, consumes tokens)
 
 ### 17 Hide Toggles
 
@@ -78,8 +99,12 @@ Every toggle hides a specific piece of ST's UI. Nothing is deleted — everythin
 Clean wrappers around ST's raw settings, right in the Streamline panel:
 
 - **Creativity (Temperature)**: Preset buttons — Low (0.5) / Medium (0.9) / High (1.2) / Max (1.8) — with an expandable raw slider
-- **Max Response Length**: Preset buttons — Short (200) / Medium (600) / Long (1500) / Max (4096) — with an expandable raw input
-- **Context Size**: Human-readable display (e.g. "128k") with auto-detect and manual override
+- **Max Response Length**: Preset buttons — Short (400) / Medium (1000) / Long (2500) / Max (8192) — with an expandable raw input
+- **Context Size**: Preset buttons — 32k / 128k / 200k / 1M — with model-aware auto-detection and custom override. Persists across sessions and preset changes.
+
+### Model-Aware Context Detection
+
+Streamline auto-detects your connected model's context window from ST's model list metadata, with a fallback lookup table covering 25+ model families (Claude, Gemini, GPT, GLM, DeepSeek, Llama, Mistral, and more). No more hitting the 4095 wall on a fresh install.
 
 ### System Prompt Shortcut
 
@@ -97,12 +122,8 @@ All previous toggle states are saved. **Reset All** restores them.
 
 ### Quick Actions
 
-- **Apply Narrative Defaults**: One click to enable all hides, neutralize all settings, disable bloat PM fields, and enable streaming. Stores all previous values for restore.
-- **Reset All**: One click to restore every original value, re-enable all PM fields, and unhide everything.
-
-### GM Mode *(coming in v0.3)*
-
-A single toggle that shifts the AI from chatbot to narrator/game master. Injects a base GM framing prompt underneath your system prompt — establishing that the AI controls the world and NPCs while the player's agency is absolute. Editable, non-overriding, visible in Prompt Inspector.
+- **Apply Narrative Defaults**: One click to enable GM Mode, all hides, neutralize all settings, disable bloat PM fields, enable streaming, and auto-detect context size. Stores all previous values for restore.
+- **Reset All**: One click to disable GM Mode, restore every original value, re-enable all PM fields, and unhide everything.
 
 ---
 
@@ -154,7 +175,7 @@ ST's scattered toggles for these things are legacy from an era when prompts were
 
 ### Subtractive first
 
-The biggest improvement is removing things, not adding things. Every toggle Streamline provides *hides* something. The only additions are the simplified controls (wrappers around existing settings) and the system prompt shortcut (a mirror of an existing field).
+The biggest improvement is removing things, not adding things. Every toggle Streamline provides *hides* something. The additions — GM Mode, simplified controls, the assistant — exist to support the core workflow, not add complexity.
 
 ### Non-destructive always
 
@@ -191,13 +212,18 @@ Streamline operates at the **functionality layer** — it doesn't touch themes (
 
 ## Roadmap
 
-| Version | Phase | Status |
-|---|---|---|
-| v0.1.0 | Basic Hide/Disable Layer | Done |
-| v0.2.0 | Deep Clean & Simplification | Done |
-| v0.2.5 | Neutralization & PM Cleanup | Done |
-| v0.3.0 | GM Mode | Next |
-| v0.4.0 | Finalization & Testing | Planned |
+| Version | What shipped |
+|---|---|
+| v0.1.0 | Basic Hide/Disable Layer — 6 hide toggles, CSS body-class pattern |
+| v0.2.0 | Deep Clean & Simplification — 17 toggles, simplified controls, system prompt shortcut |
+| v0.2.5 | Neutralization & PM Cleanup — three-tier neutralize, prompt manager field management |
+| v0.3.0 | Model Detection & Assistant — auto context detection, context presets, Streamline Assistant |
+| v0.4.0 | GM Mode — narrator/GM injection, smart prompt detection, chat color customization |
+
+### What's next
+- Knowledge base for the assistant (curated ST ecosystem info)
+- First-run experience / guided setup
+- Post-action summaries ("here's what Streamline just changed")
 
 ---
 
@@ -209,6 +235,14 @@ Someone migrating from AIRealm, Janitor AI, DreamGen, or similar platforms who w
 - The AI acting as a narrator/game master, not a chatbot
 - Their system prompt handling style, perspective, content rules — not ST's toggles
 - Character cards working as detailed profiles, not restructured by the platform
+
+---
+
+## Contact
+
+- **Discord**: RealDoomSlaya
+- **Steam**: [RealDoomSlaya](https://steamcommunity.com/id/RealDoomSlaya)
+- **GitHub Issues**: [Report a bug or request a feature](https://github.com/RealDoomSlaya/SillyTavern-Streamline/issues)
 
 ---
 
