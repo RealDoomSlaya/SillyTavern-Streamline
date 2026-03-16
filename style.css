@@ -600,6 +600,16 @@ body.streamline--hide-group-chat #group-metadata-controls {
     opacity: 0.7;
 }
 
+/* Guarantee spinner animation even if FA's fa-spin is overridden by a theme */
+.streamline-assistant-msg-pending .fa-spinner {
+    animation: streamline-spin 1s linear infinite !important;
+}
+
+@keyframes streamline-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 /* Input row */
 .streamline-assistant-input-row {
     display: flex;

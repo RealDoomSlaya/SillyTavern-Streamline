@@ -251,6 +251,33 @@ async function sendToAPI(messages, signal, onChunk) {
 let chatHistory = [];
 let currentAbortController = null;
 
+/**
+ * Save chat history to extension settings so it survives module reloads
+ * (e.g., when enabling/disabling another extension triggers a reload).
+ */
+function persistChatHistory() {
+    try {
+        const settings = extension_settings?.streamline;
+        if (settings) {
+            settings._assistantHistory = chatHistory.slice(-20); // Keep last 20 messages
+        }
+    } catch { /* Silent fail — non-critical */ }
+}
+
+/**
+ * Restore chat history from extension settings after a module reload.
+ */
+function restoreChatHistory() {
+    try {
+        const saved = extension_settings?.streamline?._assistantHistory;
+        if (Array.isArray(saved) && saved.length > 0) {
+            chatHistory = saved;
+            return true;
+        }
+    } catch { /* Silent fail */ }
+    return false;
+}
+
 function createAssistantUI() {
     // Floating button (only visible when assistant is enabled)
     const buttonHtml = `
@@ -296,6 +323,22 @@ function createAssistantUI() {
 function initAssistantUI() {
     createAssistantUI();
 
+    // Restore chat history from previous session / module reload
+    if (restoreChatHistory()) {
+        const $messages = $('#streamline_assistant_messages');
+        $messages.empty();
+        // Re-render saved messages
+        for (const msg of chatHistory) {
+            if (msg.role === 'user') {
+                const userHtml = escapeHtml(msg.content).replace(/\n/g, '<br>');
+                $messages.append(`<div class="streamline-assistant-msg streamline-assistant-msg-user">${userHtml}</div>`);
+            } else if (msg.role === 'assistant') {
+                $messages.append(`<div class="streamline-assistant-msg streamline-assistant-msg-ai">${formatResponse(msg.content)}</div>`);
+            }
+        }
+        alog.info('Restored chat history from settings');
+    }
+
     // Toggle modal visibility
     $('#streamline_assistant_btn').on('click', () => {
         const $modal = $('#streamline_assistant_modal');
@@ -313,6 +356,7 @@ function initAssistantUI() {
     // Clear chat
     $('#streamline_assistant_clear').on('click', () => {
         chatHistory = [];
+        persistChatHistory();
         const $messages = $('#streamline_assistant_messages');
         $messages.html(`
             <div class="streamline-assistant-msg streamline-assistant-msg-ai">
@@ -406,6 +450,7 @@ async function sendUserMessage() {
         if (chatHistory.length > 20) {
             chatHistory = chatHistory.slice(-20);
         }
+        persistChatHistory();
     } catch (error) {
         if (error.name === 'AbortError') {
             $aiMsg.html('<em>Cancelled</em>');
