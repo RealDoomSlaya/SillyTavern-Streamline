@@ -240,8 +240,8 @@ Someone migrating from AIRealm, Janitor AI, DreamGen, or similar platforms who w
 
 ## Contact
 
-- **Discord**: RealDoomSlaya
-- **Steam**: [RealDoomSlaya](https://steamcommunity.com/id/RealDoomSlaya)
+- **Discord**: doomslayavvv
+- **Steam**: [THERealDoomSlayer](https://steamcommunity.com/id/THERealDoomSlayer/)
 - **GitHub Issues**: [Report a bug or request a feature](https://github.com/RealDoomSlaya/SillyTavern-Streamline/issues)
 
 ---
