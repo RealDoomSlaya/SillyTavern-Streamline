@@ -1,11 +1,12 @@
 import { extension_settings, renderExtensionTemplateAsync } from '../../../extensions.js';
-import { eventSource, event_types, saveSettingsDebounced } from '../../../../script.js';
+import { eventSource, event_types, saveSettingsDebounced, setExtensionPrompt, extension_prompt_types, extension_prompt_roles } from '../../../../script.js';
 import { promptManager, model_list, getChatCompletionModel } from '../../../openai.js';
 import { initAssistant, setAssistantEnabled } from './assistant.js';
 
 const MODULE_NAME = 'third-party/Streamline';
 const SETTINGS_KEY = 'streamline';
-const VERSION = '0.3.0';
+const GM_INJECTION_KEY = 'streamline_gm_mode';
+const VERSION = '0.4.0';
 
 // =====================================================================
 // Default Settings
@@ -46,7 +47,18 @@ const defaultSettings = {
     // Assistant bubble colors (null = use CSS defaults)
     _userBubbleColor: null,
     _aiBubbleColor: null,
+    // GM Mode
+    _gmEnabled: false,
+    _gmPrompt: null, // null = use default
 };
+
+// =====================================================================
+// GM Mode — Default Injection Prompt
+// =====================================================================
+
+const DEFAULT_GM_PROMPT = `You are the Game Master and narrator of this story. You control the world, all non-player characters, the environment, and the consequences of actions. You do not control the player's character — their actions, thoughts, and decisions belong entirely to them.
+
+Narrate the world's response to the player's actions. NPCs act autonomously with their own motivations, knowledge, and limitations — they do not know things they haven't witnessed or been told. The world is dynamic and does not wait for the player.`;
 
 // Keys that are toggle-type (checkbox) settings
 const TOGGLE_KEYS = Object.keys(defaultSettings).filter(k => !k.startsWith('_'));
@@ -435,6 +447,9 @@ function reapplyActiveNeutralizations() {
         }
         setPMFieldStates(newStates);
     }
+
+    // Re-apply GM Mode injection
+    applyGMMode();
 }
 
 function showRestoreNote(key) {
@@ -1032,6 +1047,51 @@ function updateModelInfoDisplay(modelName, contextSize) {
  * @param {'user'|'ai'} who - Which bubble to style
  * @param {string|null} hexColor - Hex color or null to reset
  */
+// =====================================================================
+// GM Mode — Injection Logic
+// =====================================================================
+
+/**
+ * Get the current GM prompt text (user-customized or default).
+ * @returns {string}
+ */
+function getGMPrompt() {
+    const settings = extension_settings[SETTINGS_KEY];
+    return settings?._gmPrompt || DEFAULT_GM_PROMPT;
+}
+
+/**
+ * Apply or remove the GM Mode injection based on current state.
+ * Uses setExtensionPrompt with BEFORE_PROMPT position so it layers
+ * underneath the user's system prompt (user prompt has the final word).
+ */
+function applyGMMode() {
+    const settings = extension_settings[SETTINGS_KEY];
+    const enabled = !!settings?._gmEnabled;
+
+    if (enabled) {
+        const prompt = getGMPrompt();
+        setExtensionPrompt(
+            GM_INJECTION_KEY,
+            prompt,
+            extension_prompt_types.BEFORE_PROMPT,
+            0,          // depth (not used for BEFORE_PROMPT)
+            false,      // scan (don't include in world info scan)
+            extension_prompt_roles.SYSTEM,
+        );
+        console.log('[Streamline] GM Mode ON — injection active');
+    } else {
+        // Clear the injection by setting empty value
+        setExtensionPrompt(
+            GM_INJECTION_KEY,
+            '',
+            extension_prompt_types.NONE,
+            0,
+        );
+        console.log('[Streamline] GM Mode OFF — injection cleared');
+    }
+}
+
 function applyBubbleColor(who, hexColor) {
     const root = document.documentElement;
     if (who === 'user') {
@@ -1107,12 +1167,24 @@ jQuery(async function () {
             writeSTContextSize(detected || 128000);
             updateContextDisplay();
         }
+
+        // Enable GM Mode
+        extension_settings[SETTINGS_KEY]._gmEnabled = true;
+        $('#streamline_gm_enabled').prop('checked', true);
+        $('#streamline_gm_prompt_section').show();
+        applyGMMode();
     });
 
     // Quick action: Reset All
     $('#streamline_reset_all').on('click', () => {
         setAllToggles(false);
         restorePMFields();
+
+        // Disable GM Mode
+        extension_settings[SETTINGS_KEY]._gmEnabled = false;
+        $('#streamline_gm_enabled').prop('checked', false);
+        $('#streamline_gm_prompt_section').hide();
+        applyGMMode();
     });
 
     // Load saved settings and apply hide classes immediately
@@ -1184,6 +1256,53 @@ jQuery(async function () {
         delete extension_settings[SETTINGS_KEY]._aiBubbleColor;
         $('#streamline_ai_bubble_color').val('#888888');
         applyBubbleColor('ai', null);
+        saveSettingsDebounced();
+    });
+
+    // ---- GM Mode ----
+
+    const gmEnabled = !!extension_settings[SETTINGS_KEY]._gmEnabled;
+    $('#streamline_gm_enabled').prop('checked', gmEnabled);
+    if (gmEnabled) {
+        $('#streamline_gm_prompt_section').show();
+    }
+
+    // Load custom GM prompt or show default
+    const gmPromptText = extension_settings[SETTINGS_KEY]._gmPrompt || DEFAULT_GM_PROMPT;
+    $('#streamline_gm_prompt').val(gmPromptText);
+
+    // Apply GM mode on load (will inject or clear based on state)
+    applyGMMode();
+
+    $('#streamline_gm_enabled').on('change', function () {
+        const enabled = !!this.checked;
+        extension_settings[SETTINGS_KEY]._gmEnabled = enabled;
+        $('#streamline_gm_prompt_section').toggle(enabled);
+        applyGMMode();
+        saveSettingsDebounced();
+    });
+
+    $('#streamline_gm_prompt').on('input', function () {
+        const text = $(this).val().trim();
+        // Store custom prompt, or null if it matches the default
+        if (text === DEFAULT_GM_PROMPT || text === '') {
+            extension_settings[SETTINGS_KEY]._gmPrompt = null;
+        } else {
+            extension_settings[SETTINGS_KEY]._gmPrompt = text;
+        }
+        // Re-apply injection with new text
+        if (extension_settings[SETTINGS_KEY]._gmEnabled) {
+            applyGMMode();
+        }
+        saveSettingsDebounced();
+    });
+
+    $('#streamline_gm_reset_prompt').on('click', function () {
+        extension_settings[SETTINGS_KEY]._gmPrompt = null;
+        $('#streamline_gm_prompt').val(DEFAULT_GM_PROMPT);
+        if (extension_settings[SETTINGS_KEY]._gmEnabled) {
+            applyGMMode();
+        }
         saveSettingsDebounced();
     });
 

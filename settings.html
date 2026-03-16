@@ -86,6 +86,32 @@
 
             <hr>
 
+            <!-- ========== GM MODE ========== -->
+            <div class="streamline-section">
+                <small class="streamline-section-header">GM Mode</small>
+                <small class="streamline-hint">Shifts the AI from a chatbot into a narrator and game master. Injects a base framing prompt that establishes the AI's role — your system prompt layers on top and has the final word.</small>
+
+                <label class="checkbox_label" for="streamline_gm_enabled" title="Enable GM Mode — injects a game master framing prompt before your system prompt.">
+                    <input id="streamline_gm_enabled" type="checkbox" />
+                    <span>Enable GM Mode</span>
+                </label>
+
+                <div id="streamline_gm_prompt_section" style="display: none;">
+                    <small class="streamline-control-label" style="margin-top: 6px;">GM Framing Prompt</small>
+                    <small class="streamline-hint">This is injected before your system prompt. Edit it to customize how the AI approaches its role as game master.</small>
+                    <textarea id="streamline_gm_prompt" class="text_pole textarea_compact autoSetHeight" rows="6" placeholder="Enter your GM framing prompt..."></textarea>
+                    <div style="display: flex; gap: 6px; margin-top: 4px;">
+                        <div class="menu_button streamline-small-btn" id="streamline_gm_reset_prompt" title="Reset to default GM prompt">Reset to Default</div>
+                    </div>
+                    <small class="streamline-hint" style="margin-top: 4px;">
+                        <i class="fa-solid fa-circle-info"></i>
+                        Visible in Prompt Inspector as "GM Mode". Your system prompt always wins if there's a conflict.
+                    </small>
+                </div>
+            </div>
+
+            <hr>
+
             <!-- ========== PHASE 1 HIDES ========== -->
             <div class="streamline-section">
                 <small class="streamline-section-header">Hide — Core Cleanup</small>
@@ -206,22 +232,23 @@
             <div class="streamline-section">
                 <small class="streamline-section-header">Quick Actions</small>
 
-                <div id="streamline_apply_narrative_defaults" class="menu_button menu_button_icon" title="Enable all hides, neutralize all settings, disable bloat PM fields, enable streaming, and set context to 128k if needed. All previous values are saved for restore.">
+                <div id="streamline_apply_narrative_defaults" class="menu_button menu_button_icon" title="Enable GM Mode, all hides, neutralize all settings, disable bloat PM fields, enable streaming, and set context to 128k if needed. All previous values are saved for restore.">
                     <i class="fa-solid fa-wand-magic-sparkles"></i>
                     <span>Apply Narrative Defaults</span>
                 </div>
 
-                <div id="streamline_reset_all" class="menu_button menu_button_icon" title="Restore all original values, re-enable all PM fields, and unhide everything.">
+                <div id="streamline_reset_all" class="menu_button menu_button_icon" title="Restore all original values, disable GM Mode, re-enable all PM fields, and unhide everything.">
                     <i class="fa-solid fa-rotate-left"></i>
                     <span>Reset All</span>
                 </div>
 
                 <small class="streamline-hint" style="margin-top: 4px;">
                     <i class="fa-solid fa-circle-info"></i>
-                    Apply Narrative Defaults stores all previous values. Reset All restores them.
-                    Context set to 128k if below 4k. Prompt Manager fields disabled: Char Description,
-                    Char Personality, Scenario, Enhance Definitions, Auxiliary, Chat Examples,
-                    Post-History Instructions. Left enabled: Main Prompt, Persona, World Info, Chat History.
+                    Apply Narrative Defaults enables GM Mode, stores all previous values, enables all hides,
+                    and sets context to 128k if below 4k. Reset All disables GM Mode and restores everything.
+                    PM fields disabled: Char Description, Char Personality, Scenario, Enhance Definitions,
+                    Auxiliary, Chat Examples, Post-History Instructions. Left enabled: Main Prompt, Persona,
+                    World Info, Chat History.
                 </small>
             </div>
 
