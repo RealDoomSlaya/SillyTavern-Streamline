@@ -212,6 +212,12 @@ Someone migrating from AIRealm, Janitor AI, DreamGen, or similar platforms who w
 
 ---
 
+## Credits
+
+Built by **Claude** (Anthropic) with design direction, testing, and creative vision by **RealDoomSlaya**. Every feature, philosophy decision, and UX choice comes from real narrative RP workflows — Claude handles the code, the human handles the "why."
+
+---
+
 ## License
 
 [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html) — matching SillyTavern's license.
