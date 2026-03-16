@@ -297,6 +297,79 @@ body.streamline--hide-group-chat #group-metadata-controls {
 
 
 /* =============================================================
+   PHASE 5 — User Settings Cleanup
+   ============================================================= */
+
+/* --- Hide User Settings Clutter ---------------------------
+   Debug tools, scripting features, cosmetic noise, and group
+   chat leftovers that don't belong in a narrative RP workflow. */
+
+/* Debug / developer tools */
+body.streamline--hide-user-settings-clutter label[for="console_log_prompts"],
+body.streamline--hide-user-settings-clutter label[for="request_token_probabilities"],
+body.streamline--hide-user-settings-clutter label[for="mesIDDisplayEnabled"],
+body.streamline--hide-user-settings-clutter label[for="messageTimerEnabled"],
+body.streamline--hide-user-settings-clutter label[for="messageTokensEnabled"],
+body.streamline--hide-user-settings-clutter label[for="encode_tags"] {
+    display: none !important;
+}
+
+/* Group chat remnants in User Settings (complements Phase 2 group chat hide) */
+body.streamline--hide-user-settings-clutter label[for="show_group_chat_queue"],
+body.streamline--hide-user-settings-clutter label[for="disable_group_trimming"] {
+    display: none !important;
+}
+
+/* AutoComplete Settings section (STscript power-user feature) */
+body.streamline--hide-user-settings-clutter div[name="AutoCompleteToggle"] {
+    display: none !important;
+}
+
+/* STscript Settings section */
+body.streamline--hide-user-settings-clutter div[name="STscriptToggles"] {
+    display: none !important;
+}
+
+/* Auto-swipe section (dangerous — auto-rejects AI responses) */
+body.streamline--hide-user-settings-clutter .inline-drawer:has(#auto_swipe) {
+    display: none !important;
+}
+
+/* Auto-Continue section (can cause runaway generation) */
+body.streamline--hide-user-settings-clutter div[name="AutoContiueBlock"] {
+    display: none !important;
+}
+
+/* --- Hide Chat Paradigm Settings --------------------------
+   Settings that assume a {{char}}/{{user}} two-speaker chatbot
+   model. Irrelevant or harmful in GM Mode where the AI is a
+   narrator managing many NPCs, not one character in a conversation. */
+
+/* "Show {{char}}: in responses" — meaningless when there's no single char */
+body.streamline--hide-chat-paradigm label[for="allow_name2_display"],
+/* "Show {{user}}: in responses" — same */
+body.streamline--hide-chat-paradigm label[for="allow_name1_display"],
+/* Quick "Impersonate" — wrong paradigm, player doesn't swap roles */
+body.streamline--hide-chat-paradigm label[for="quick_impersonate"],
+/* "Send" to Continue — designed for single-character continuation */
+body.streamline--hide-chat-paradigm label[for="continue_on_send"],
+/* Quick "Continue" — same paradigm assumption */
+body.streamline--hide-chat-paradigm label[for="quick_continue"],
+/* Prefer Char. Prompt — which character? there's no single one */
+body.streamline--hide-chat-paradigm label[for="prefer_character_prompt"],
+/* Experimental Macro Engine — can silently break prompts */
+body.streamline--hide-chat-paradigm label[for="experimental_macro_engine"] {
+    display: none !important;
+}
+
+/* Example Messages Behavior — designed for single-character cards */
+body.streamline--hide-chat-paradigm #examples-behavior-block,
+body.streamline--hide-chat-paradigm .range-block:has(#example_messages_behavior) {
+    display: none !important;
+}
+
+
+/* =============================================================
    Streamline Settings Panel Styles
    ============================================================= */
 

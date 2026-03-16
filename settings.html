@@ -230,6 +230,27 @@
 
             <hr>
 
+            <!-- ========== PHASE 5 — USER SETTINGS CLEANUP ========== -->
+            <div class="streamline-section">
+                <small class="streamline-section-header">Hide — User Settings Cleanup</small>
+                <small class="streamline-hint">Cleans up SillyTavern's User Settings panel. Hides debug tools, scripting features, and auto-swipe/auto-continue (which are disabled when hidden).</small>
+
+                <label class="checkbox_label" for="streamline_hide_user_settings_clutter" title="Hide debug tools (Log prompts, Token probabilities, Message IDs, Message Timer, Token Count, Tags), scripting features (AutoComplete, STscript), group chat settings, Auto-swipe, and Auto-Continue. Auto-swipe and Auto-Continue are disabled when hidden.">
+                    <input id="streamline_hide_user_settings_clutter" type="checkbox" />
+                    <span>Hide User Settings Clutter</span>
+                </label>
+
+                <label class="checkbox_label" for="streamline_hide_chat_paradigm" title="Hide settings that assume a {{char}}/{{user}} two-speaker chatbot model: Show char/user names in responses, Quick Impersonate, Send to Continue, Quick Continue, Prefer Char Prompt, Experimental Macro Engine, and Example Messages Behavior. All are disabled when hidden.">
+                    <input id="streamline_hide_chat_paradigm" type="checkbox" />
+                    <span>Hide Chat Paradigm Settings</span>
+                </label>
+                <small class="streamline-hint">
+                    Hides settings built for the {{char}}/{{user}} chatbot model — irrelevant in GM Mode where the AI narrates a world, not a conversation.
+                </small>
+            </div>
+
+            <hr>
+
             <!-- ========== QUICK ACTIONS ========== -->
             <div class="streamline-section">
                 <small class="streamline-section-header">Quick Actions</small>

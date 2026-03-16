@@ -50,6 +50,10 @@ const defaultSettings = {
     hide_persona_position: false,
     hide_group_chat: false,
 
+    // Phase 5 — User Settings Cleanup
+    hide_user_settings_clutter: false,
+    hide_chat_paradigm: false,
+
     // Phase 2.5 — Preserved values (backup store for neutralized settings)
     _preserved: {},
     // Phase 2.5 — Preserved prompt manager toggle states
@@ -105,6 +109,10 @@ const TOGGLE_MAP = {
     hide_talkativeness: 'streamline--hide-talkativeness',
     hide_persona_position: 'streamline--hide-persona-position',
     hide_group_chat: 'streamline--hide-group-chat',
+
+    // Phase 5 — User Settings
+    hide_user_settings_clutter: 'streamline--hide-user-settings-clutter',
+    hide_chat_paradigm: 'streamline--hide-chat-paradigm',
 };
 
 // =====================================================================
@@ -196,6 +204,83 @@ const HARD_NEUTRALIZE = {
             const $el = $('#context_presets');
             if ($el.length) {
                 $el.val(saved).trigger('change');
+            }
+        },
+    },
+
+    // Phase 5 — User Settings: Auto-swipe (dangerous auto-reject)
+    hide_user_settings_clutter: {
+        label: 'Auto-swipe & Auto-Continue disabled',
+        save() {
+            return {
+                auto_swipe: $('#auto_swipe').prop('checked') || false,
+                auto_continue: $('#auto_continue_enabled').prop('checked') || false,
+            };
+        },
+        apply() {
+            const $swipe = $('#auto_swipe');
+            if ($swipe.length && $swipe.prop('checked')) {
+                $swipe.prop('checked', false).trigger('input');
+            }
+            const $cont = $('#auto_continue_enabled');
+            if ($cont.length && $cont.prop('checked')) {
+                $cont.prop('checked', false).trigger('input');
+            }
+        },
+        restore(saved) {
+            if (!saved) return;
+            if (saved.auto_swipe) {
+                const $swipe = $('#auto_swipe');
+                if ($swipe.length) $swipe.prop('checked', true).trigger('input');
+            }
+            if (saved.auto_continue) {
+                const $cont = $('#auto_continue_enabled');
+                if ($cont.length) $cont.prop('checked', true).trigger('input');
+            }
+        },
+    },
+
+    // Phase 5 — Chat Paradigm: disable chatbot-model settings
+    hide_chat_paradigm: {
+        label: 'Disabled — GM Mode uses a different interaction model',
+        save() {
+            return {
+                allow_name1: $('#allow_name1_display').prop('checked') || false,
+                allow_name2: $('#allow_name2_display').prop('checked') || false,
+                quick_impersonate: $('#quick_impersonate').prop('checked') || false,
+                continue_on_send: $('#continue_on_send').prop('checked') || false,
+                quick_continue: $('#quick_continue').prop('checked') || false,
+                experimental_macro: $('#experimental_macro_engine').prop('checked') || false,
+            };
+        },
+        apply() {
+            const ids = [
+                'allow_name1_display', 'allow_name2_display',
+                'quick_impersonate', 'continue_on_send', 'quick_continue',
+                'experimental_macro_engine',
+            ];
+            for (const id of ids) {
+                const $el = $(`#${id}`);
+                if ($el.length && $el.prop('checked')) {
+                    $el.prop('checked', false).trigger('input');
+                }
+            }
+        },
+        restore(saved) {
+            if (!saved) return;
+            const map = {
+                allow_name1: 'allow_name1_display',
+                allow_name2: 'allow_name2_display',
+                quick_impersonate: 'quick_impersonate',
+                continue_on_send: 'continue_on_send',
+                quick_continue: 'quick_continue',
+                experimental_macro: 'experimental_macro_engine',
+            };
+            for (const [key, id] of Object.entries(map)) {
+                if (saved[key]) {
+                    const $el = $(`#${id}`);
+                    if ($el.length) $el.prop('checked', true).trigger('input');
+                }
             }
         },
     },

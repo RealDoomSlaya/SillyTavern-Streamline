@@ -42,6 +42,10 @@ Each toggle hides a specific piece of ST's UI using CSS. Nothing is deleted — 
 - Hide Persona Position: Hides persona description position dropdown. Unnecessary complexity.
 - Hide Group Chat: Hides group chat button and management panel. GM Mode means the AI handles all NPCs — ST's multi-bot group system is a different paradigm.
 
+**Phase 5 — User Settings Cleanup:**
+- Hide User Settings Clutter: Hides debug tools (Log prompts to console, Request token probabilities, Message IDs, Message Timer, Message Token Count, Show <tags>), group chat remnants (Show group chat queue, Relax message trim), scripting features (AutoComplete Settings, STscript Settings), Auto-swipe section, and Auto-Continue section. HARD neutralized — Auto-swipe and Auto-Continue are disabled when hidden because they can auto-reject AI responses or cause runaway generation.
+- Hide Chat Paradigm Settings: Hides settings that assume a {{char}}/{{user}} two-speaker chatbot model — irrelevant in GM Mode where the AI narrates a world with many NPCs. Hides: Show {{char}} in responses, Show {{user}} in responses, Quick Impersonate, Send to Continue, Quick Continue, Prefer Char Prompt, Experimental Macro Engine, and Example Messages Behavior. HARD neutralized — all disabled when hidden because they're based on a single-character chatbot model that conflicts with GM/narrator RP.
+
 ### Neutralization System
 Hiding something doesn't always stop it from affecting your prompts. Streamline neutralizes hidden settings:
 - **Hard neutralize**: Forces settings OFF that are technically obsolete for cloud CC APIs (Instruct Mode, CFG Scale, Token Padding, Context Template).
