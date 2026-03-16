@@ -1,6 +1,7 @@
 import { extension_settings, renderExtensionTemplateAsync } from '../../../extensions.js';
 import { eventSource, event_types, saveSettingsDebounced } from '../../../../script.js';
 import { promptManager, model_list, getChatCompletionModel } from '../../../openai.js';
+import { initAssistant, setAssistantEnabled } from './assistant.js';
 
 const MODULE_NAME = 'third-party/Streamline';
 const SETTINGS_KEY = 'streamline';
@@ -40,6 +41,8 @@ const defaultSettings = {
     _pmFieldsDisabled: false,
     // Persisted context size — survives preset changes and reloads
     _contextSize: null,
+    // Assistant — opt-in, OFF by default
+    _assistantEnabled: false,
 };
 
 // Keys that are toggle-type (checkbox) settings
@@ -1094,6 +1097,19 @@ jQuery(async function () {
     initCreativityControls();
     initResponseLengthControls();
     initContextControls();
+
+    // Initialize assistant (creates UI elements, stays hidden until enabled)
+    initAssistant();
+    const assistantEnabled = !!extension_settings[SETTINGS_KEY]._assistantEnabled;
+    $('#streamline_assistant_enabled').prop('checked', assistantEnabled);
+    setAssistantEnabled(assistantEnabled);
+
+    $('#streamline_assistant_enabled').on('change', function () {
+        const enabled = !!this.checked;
+        extension_settings[SETTINGS_KEY]._assistantEnabled = enabled;
+        setAssistantEnabled(enabled);
+        saveSettingsDebounced();
+    });
 
     // ---- Event-driven hooks (replace all setTimeout hacks) ----
 
