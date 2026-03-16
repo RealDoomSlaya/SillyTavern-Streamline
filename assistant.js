@@ -578,9 +578,17 @@ function makeModalDraggable() {
         if (!isDragging) return;
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
+        const modalRect = $modal[0].getBoundingClientRect();
+        // Clamp so at least 40px of the header stays visible on each edge
+        const minLeft = 40 - modalRect.width;
+        const maxLeft = window.innerWidth - 40;
+        const minTop = 0; // Don't let top go above viewport
+        const maxTop = window.innerHeight - 40;
+        const newLeft = Math.max(minLeft, Math.min(maxLeft, startLeft + dx));
+        const newTop = Math.max(minTop, Math.min(maxTop, startTop + dy));
         $modal.css({
-            left: startLeft + dx + 'px',
-            top: startTop + dy + 'px',
+            left: newLeft + 'px',
+            top: newTop + 'px',
             right: 'auto',
             bottom: 'auto',
         });
