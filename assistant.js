@@ -90,14 +90,46 @@ function gatherContext() {
         const ctx = getContext();
         const streamlineSettings = ctx.extensionSettings?.streamline;
         if (streamlineSettings) {
+            const stateLines = [];
+
+            // GM Mode
+            stateLines.push(`- GM Mode: ${streamlineSettings._gmEnabled ? 'ON' : 'OFF'}`);
+
+            // Active hides
             const activeHides = Object.entries(streamlineSettings)
                 .filter(([k, v]) => !k.startsWith('_') && v === true)
                 .map(([k]) => k.replace('hide_', '').replace(/_/g, ' '));
             if (activeHides.length > 0) {
-                parts.push(`## Active Streamline Hides\n${activeHides.map(h => `- ${h}`).join('\n')}`);
+                stateLines.push(`- Active hides (${activeHides.length}/17): ${activeHides.join(', ')}`);
             } else {
-                parts.push('## Streamline State\nNo hides currently active');
+                stateLines.push('- No hides active');
             }
+
+            // PM fields state
+            if (streamlineSettings._pmFieldsDisabled) {
+                stateLines.push('- PM fields: narrative defaults applied (redundant fields disabled)');
+            }
+
+            // Context persistence
+            if (streamlineSettings._contextSize) {
+                stateLines.push(`- Persisted context size: ${streamlineSettings._contextSize}`);
+            }
+
+            parts.push(`## Streamline State\n${stateLines.join('\n')}`);
+        }
+    } catch {
+        // Silent fail
+    }
+
+    // 4. User's system prompt (first 500 chars — enough for the assistant to give targeted advice)
+    try {
+        const $prompt = $('#streamline_system_prompt');
+        const promptText = $prompt.length ? ($prompt.val() || '').trim() : '';
+        if (promptText) {
+            const excerpt = promptText.length > 500 ? promptText.substring(0, 500) + '...' : promptText;
+            parts.push(`## User's System Prompt (excerpt)\n${excerpt}`);
+        } else {
+            parts.push('## User\'s System Prompt\n(empty — no system prompt set)');
         }
     } catch {
         // Silent fail

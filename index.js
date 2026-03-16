@@ -60,6 +60,8 @@ const defaultSettings = {
     _contextSize: null,
     // Assistant — opt-in, OFF by default
     _assistantEnabled: false,
+    // Assistant chat history (persists across module reloads)
+    _assistantHistory: [],
     // Assistant bubble colors (null = use CSS defaults)
     _userBubbleColor: null,
     _aiBubbleColor: null,

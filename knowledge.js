@@ -56,6 +56,10 @@ A toggle that injects a Game Master / narrator framing prompt BEFORE the user's 
 - Power users who already have GM framing in their system prompt don't need GM Mode. The smart detection will tell them this.
 - New users with no system prompt benefit the most from GM Mode — it gives the AI a foundation to work from.
 - Visible in Prompt Inspector (the extension) so users can verify what's being injected.
+- Smart detection hints: Streamline analyzes the user's system prompt and shows contextual advice — suggests GM Mode if the prompt is empty or chatbot-style, notes redundancy if the prompt already has GM/narrator framing.
+
+### Streaming Default
+Streamline enables streaming on first load (one-time). Streaming is the standard for cloud APIs and has no downside unless debugging.
 
 ### Simplified Controls
 Clean wrappers around ST's raw settings, shown in the Streamline panel:
@@ -63,11 +67,14 @@ Clean wrappers around ST's raw settings, shown in the Streamline panel:
 - **Max Response Length**: Preset buttons — Short (400 tokens) / Medium (1000) / Long (2500) / Max (8192). Has an expandable raw input. Syncs with ST's max_tokens setting.
 - **Context Size**: Preset buttons — 32k / 128k / 200k / 1M. Auto-detects from connected model. Has custom override. Persists across preset changes and reloads (ST's presets normally reset context to 4095).
 
+### Context Persistence
+Streamline saves the user's context size choice and re-applies it when a preset change or reload resets context to a low value (≤4096). This is critical because ST's sampling presets frequently reset context to 4095, which breaks everything on modern models.
+
 ### Model-Aware Context Detection
-Streamline auto-detects the connected model's context window from ST's model list metadata, with a fallback lookup table covering 25+ model families. This prevents the common "Mandatory prompts exceed context size" error that happens when context is stuck at 4095 on a fresh install.
+Streamline auto-detects the connected model's context window from ST's model list metadata, with a fallback lookup table covering 25+ model families. Auto-detection only applies when context is at the ST default (≤4096) — it won't overwrite a user's manual choice. This prevents the common "Mandatory prompts exceed context size" error that happens when context is stuck at 4095 on a fresh install.
 
 ### System Prompt Shortcut
-A text area at the top of the Streamline panel that syncs bidirectionally with the Prompt Manager's main system prompt field. Edit your prompt here instead of navigating through the Prompt Manager UI.
+A text area at the top of the Streamline panel that syncs bidirectionally with the Prompt Manager's main system prompt field. Edit your prompt here instead of navigating through the Prompt Manager UI. Changes sync both ways — editing in either place updates the other. Also re-syncs automatically when you switch characters, load a preset, or when settings reload.
 
 ### Prompt Manager Cleanup
 When Apply Narrative Defaults is pressed, Streamline soft-disables PM fields whose job your system prompt already does:
