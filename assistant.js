@@ -7,35 +7,43 @@
  */
 
 import { getRequestHeaders } from '../../../../script.js';
+import { extension_settings } from '../../../extensions.js';
 import { model_list, getChatCompletionModel, chat_completion_sources } from '../../../openai.js';
 import { getContext } from '../../../st-context.js';
+import { KNOWLEDGE_BASE } from './knowledge.js';
+
+const ALOG_PREFIX = '[Streamline Assistant]';
+const alog = {
+    info:  (...args) => console.log(ALOG_PREFIX, ...args),
+    warn:  (...args) => console.warn(ALOG_PREFIX, ...args),
+    error: (...args) => console.error(ALOG_PREFIX, ...args),
+    debug: (...args) => {
+        if (extension_settings?.streamline?._debug) console.debug(ALOG_PREFIX, '[DEBUG]', ...args);
+    },
+};
 
 // =====================================================================
 // System Prompt
 // =====================================================================
 
-const ASSISTANT_SYSTEM_PROMPT = `You are the Streamline Assistant, a helpful AI built into the Streamline extension for SillyTavern (ST). Your primary role is helping users configure SillyTavern and its extensions.
+const ASSISTANT_SYSTEM_PROMPT = `You are the Streamline Assistant, built into the Streamline extension for SillyTavern (ST). You help users configure SillyTavern, its extensions, and their narrative RP workflows.
 
-## What you know:
-- SillyTavern is a platform for AI-powered roleplay and chat, connecting to cloud APIs (Claude, Gemini, GPT, GLM, DeepSeek, etc.)
-- You are running inside SillyTavern right now, using the user's connected API
-- Streamline is an extension that simplifies ST by hiding legacy bloat and providing clean controls
-- You have access to information about the user's current setup (installed extensions, API connection, settings)
-- If web search is listed as enabled in your context, you have access to it — use it when users ask about current info, recent updates, or things beyond your training data
+You are running inside SillyTavern right now, using the user's connected API. You have a detailed knowledge base about Streamline's features, ST architecture, common problems, and popular extensions — reference it when answering.
 
-## How to help:
-- Explain what ST settings and toggles do in plain language
-- Help configure extensions based on what they're trying to accomplish
-- Answer questions about API connections, presets, prompt management, and character cards
-- Give advice on system prompts, lorebooks, and narrative RP workflows
-- If you can see an extension's settings panel, explain each field and recommend values
+## Rules:
+- The system prompt is king. Always recommend putting behavior rules in the system prompt rather than scattered toggles.
+- If Streamline has hidden something, don't suggest unhiding it unless the user specifically asks. Those features are hidden for a reason.
+- Never suggest Instruct Mode or Context Templates for cloud CC API users — they're irrelevant.
+- Character cards are for CHARACTER details (who they are), not system instructions (how the AI behaves).
+- Prefer third-party extensions over legacy built-ins (Summarize, Vector Storage) — mention caveats if recommending built-ins.
+- If web search is enabled in your context, use it for current info, recent updates, or things beyond your training data.
 
 ## Style:
-- Be concise and direct — users want answers, not essays
-- Use bullet points for multi-step instructions
-- If you don't know something specific, say so rather than guessing
-- You can help with general RP questions too, but your expertise is ST configuration
-- Keep formatting tight — avoid excessive blank lines between sections. Use single line breaks, not double.`;
+- Concise and direct — answers, not essays
+- Bullet points for multi-step instructions
+- If you don't know, say so rather than guessing
+- No markdown tables — they don't render in this chat. Use bullets or short descriptions.
+- Keep formatting tight — single line breaks, not double.`;
 
 // =====================================================================
 // Context Gathering
@@ -83,14 +91,46 @@ function gatherContext() {
         const ctx = getContext();
         const streamlineSettings = ctx.extensionSettings?.streamline;
         if (streamlineSettings) {
+            const stateLines = [];
+
+            // GM Mode
+            stateLines.push(`- GM Mode: ${streamlineSettings._gmEnabled ? 'ON' : 'OFF'}`);
+
+            // Active hides
             const activeHides = Object.entries(streamlineSettings)
                 .filter(([k, v]) => !k.startsWith('_') && v === true)
                 .map(([k]) => k.replace('hide_', '').replace(/_/g, ' '));
             if (activeHides.length > 0) {
-                parts.push(`## Active Streamline Hides\n${activeHides.map(h => `- ${h}`).join('\n')}`);
+                stateLines.push(`- Active hides (${activeHides.length}/17): ${activeHides.join(', ')}`);
             } else {
-                parts.push('## Streamline State\nNo hides currently active');
+                stateLines.push('- No hides active');
             }
+
+            // PM fields state
+            if (streamlineSettings._pmFieldsDisabled) {
+                stateLines.push('- PM fields: narrative defaults applied (redundant fields disabled)');
+            }
+
+            // Context persistence
+            if (streamlineSettings._contextSize) {
+                stateLines.push(`- Persisted context size: ${streamlineSettings._contextSize}`);
+            }
+
+            parts.push(`## Streamline State\n${stateLines.join('\n')}`);
+        }
+    } catch {
+        // Silent fail
+    }
+
+    // 4. User's system prompt (first 500 chars — enough for the assistant to give targeted advice)
+    try {
+        const $prompt = $('#streamline_system_prompt');
+        const promptText = $prompt.length ? ($prompt.val() || '').trim() : '';
+        if (promptText) {
+            const excerpt = promptText.length > 500 ? promptText.substring(0, 500) + '...' : promptText;
+            parts.push(`## User's System Prompt (excerpt)\n${excerpt}`);
+        } else {
+            parts.push('## User\'s System Prompt\n(empty — no system prompt set)');
         }
     } catch {
         // Silent fail
@@ -182,6 +222,11 @@ async function sendToAPI(messages, signal, onChunk) {
         requestData.reasoning_effort = settings.reasoning_effort;
     }
 
+    alog.debug(`Sending to API — source: ${source}, model: ${model}, features:`, {
+        web_search: !!requestData.enable_web_search,
+        reasoning: !!requestData.include_reasoning,
+    });
+
     const response = await fetch('/api/backends/chat-completions/generate', {
         method: 'POST',
         headers: getRequestHeaders(),
@@ -239,6 +284,33 @@ async function sendToAPI(messages, signal, onChunk) {
 let chatHistory = [];
 let currentAbortController = null;
 
+/**
+ * Save chat history to extension settings so it survives module reloads
+ * (e.g., when enabling/disabling another extension triggers a reload).
+ */
+function persistChatHistory() {
+    try {
+        const settings = extension_settings?.streamline;
+        if (settings) {
+            settings._assistantHistory = chatHistory.slice(-20); // Keep last 20 messages
+        }
+    } catch { /* Silent fail — non-critical */ }
+}
+
+/**
+ * Restore chat history from extension settings after a module reload.
+ */
+function restoreChatHistory() {
+    try {
+        const saved = extension_settings?.streamline?._assistantHistory;
+        if (Array.isArray(saved) && saved.length > 0) {
+            chatHistory = saved;
+            return true;
+        }
+    } catch { /* Silent fail */ }
+    return false;
+}
+
 function createAssistantUI() {
     // Floating button (only visible when assistant is enabled)
     const buttonHtml = `
@@ -284,6 +356,22 @@ function createAssistantUI() {
 function initAssistantUI() {
     createAssistantUI();
 
+    // Restore chat history from previous session / module reload
+    if (restoreChatHistory()) {
+        const $messages = $('#streamline_assistant_messages');
+        $messages.empty();
+        // Re-render saved messages
+        for (const msg of chatHistory) {
+            if (msg.role === 'user') {
+                const userHtml = escapeHtml(msg.content).replace(/\n/g, '<br>');
+                $messages.append(`<div class="streamline-assistant-msg streamline-assistant-msg-user">${userHtml}</div>`);
+            } else if (msg.role === 'assistant') {
+                $messages.append(`<div class="streamline-assistant-msg streamline-assistant-msg-ai">${formatResponse(msg.content)}</div>`);
+            }
+        }
+        alog.info('Restored chat history from settings');
+    }
+
     // Toggle modal visibility
     $('#streamline_assistant_btn').on('click', () => {
         const $modal = $('#streamline_assistant_modal');
@@ -301,6 +389,7 @@ function initAssistantUI() {
     // Clear chat
     $('#streamline_assistant_clear').on('click', () => {
         chatHistory = [];
+        persistChatHistory();
         const $messages = $('#streamline_assistant_messages');
         $messages.html(`
             <div class="streamline-assistant-msg streamline-assistant-msg-ai">
@@ -338,8 +427,9 @@ async function sendUserMessage() {
 
     const $messages = $('#streamline_assistant_messages');
 
-    // Add user message
-    $messages.append(`<div class="streamline-assistant-msg streamline-assistant-msg-user">${escapeHtml(text)}</div>`);
+    // Add user message (preserve line breaks)
+    const userHtml = escapeHtml(text).replace(/\n/g, '<br>');
+    $messages.append(`<div class="streamline-assistant-msg streamline-assistant-msg-user">${userHtml}</div>`);
 
     // Add pending AI message
     const $aiMsg = $(`<div class="streamline-assistant-msg streamline-assistant-msg-ai streamline-assistant-msg-pending"><i class="fa-solid fa-spinner fa-spin"></i> Thinking...</div>`);
@@ -359,7 +449,7 @@ async function sendUserMessage() {
         }
     }
 
-    const systemMsg = ASSISTANT_SYSTEM_PROMPT + '\n\n## Current Setup\n' + contextStr + extensionContext;
+    const systemMsg = ASSISTANT_SYSTEM_PROMPT + '\n\n' + KNOWLEDGE_BASE + '\n\n## Current Setup\n' + contextStr + extensionContext;
 
     chatHistory.push({ role: 'user', content: text });
 
@@ -393,11 +483,12 @@ async function sendUserMessage() {
         if (chatHistory.length > 20) {
             chatHistory = chatHistory.slice(-20);
         }
+        persistChatHistory();
     } catch (error) {
         if (error.name === 'AbortError') {
             $aiMsg.html('<em>Cancelled</em>');
         } else {
-            console.error('[Streamline Assistant] API error:', error);
+            alog.error('API error:', error);
             $aiMsg.removeClass('streamline-assistant-msg-pending')
                 .html(`<span style="color: var(--SmartThemeQuoteColor, #e74c3c);">Error: ${escapeHtml(error.message)}</span>`);
         }
@@ -413,19 +504,34 @@ function formatResponse(text) {
     // Basic markdown-ish formatting
     let html = escapeHtml(text);
 
-    // Headers: ## Header → bold text
+    // Headers: ## Header → bold text on its own line
     html = html.replace(/^#{1,3}\s+(.+)$/gm, '<strong>$1</strong>');
 
-    // Bold and code
+    // Bold, italic, and inline code
     html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
     // Horizontal rules
     html = html.replace(/^---+$/gm, '<hr style="border:0;border-top:1px solid var(--SmartThemeBorderColor,#444);margin:4px 0;">');
 
-    // List items: collect consecutive "- " lines into <ul>
+    // Strip markdown table rows (pipe-delimited) — convert to simple lines
+    // Header separator rows like |---|---|---| → remove entirely
+    html = html.replace(/^\|[-\s|:]+\|$/gm, '');
+    // Table rows like | cell | cell | → "cell — cell"
+    html = html.replace(/^\|(.+)\|$/gm, (_, row) => {
+        const cells = row.split('|').map(c => c.trim()).filter(c => c);
+        return cells.join(' — ');
+    });
+
+    // Numbered lists: "1. text" → <li> with numbers preserved
+    html = html.replace(/^(\d+)\.\s+(.+)$/gm, '<li><strong>$1.</strong> $2</li>');
+
+    // Unordered list items: "- text" → <li>
     html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
-    html = html.replace(/((?:<li>.*?<\/li>\n?)+)/g, '<ul style="margin:2px 0;padding-left:18px;">$1</ul>');
+
+    // Wrap consecutive <li> blocks in <ul>
+    html = html.replace(/((?:<li>.*?<\/li>\n?)+)/g, '<ul style="margin:2px 0;padding-left:18px;list-style:none;">$1</ul>');
 
     // Collapse 3+ newlines → 2, then 2 newlines → single <br> (paragraph break)
     html = html.replace(/\n{3,}/g, '\n\n');
@@ -472,9 +578,17 @@ function makeModalDraggable() {
         if (!isDragging) return;
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
+        const modalRect = $modal[0].getBoundingClientRect();
+        // Clamp so at least 40px of the header stays visible on each edge
+        const minLeft = 40 - modalRect.width;
+        const maxLeft = window.innerWidth - 40;
+        const minTop = 0; // Don't let top go above viewport
+        const maxTop = window.innerHeight - 40;
+        const newLeft = Math.max(minLeft, Math.min(maxLeft, startLeft + dx));
+        const newTop = Math.max(minTop, Math.min(maxTop, startTop + dy));
         $modal.css({
-            left: startLeft + dx + 'px',
-            top: startTop + dy + 'px',
+            left: newLeft + 'px',
+            top: newTop + 'px',
             right: 'auto',
             bottom: 'auto',
         });

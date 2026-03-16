@@ -1,11 +1,28 @@
 import { extension_settings, renderExtensionTemplateAsync } from '../../../extensions.js';
-import { eventSource, event_types, saveSettingsDebounced } from '../../../../script.js';
+import { eventSource, event_types, saveSettingsDebounced, setExtensionPrompt, extension_prompt_types, extension_prompt_roles } from '../../../../script.js';
 import { promptManager, model_list, getChatCompletionModel } from '../../../openai.js';
 import { initAssistant, setAssistantEnabled } from './assistant.js';
 
 const MODULE_NAME = 'third-party/Streamline';
 const SETTINGS_KEY = 'streamline';
-const VERSION = '0.3.0';
+const GM_INJECTION_KEY = 'streamline_gm_mode';
+const VERSION = '0.4.0';
+
+// =====================================================================
+// Logging
+// =====================================================================
+
+const LOG_PREFIX = `[Streamline v${VERSION}]`;
+const log = {
+    info:  (...args) => console.log(LOG_PREFIX, ...args),
+    warn:  (...args) => console.warn(LOG_PREFIX, ...args),
+    error: (...args) => console.error(LOG_PREFIX, ...args),
+    debug: (...args) => {
+        if (extension_settings[SETTINGS_KEY]?._debug) console.debug(LOG_PREFIX, '[DEBUG]', ...args);
+    },
+    /** Log a state change — key/value pairs for what changed */
+    state: (action, details) => console.log(LOG_PREFIX, `[${action}]`, details),
+};
 
 // =====================================================================
 // Default Settings
@@ -43,7 +60,25 @@ const defaultSettings = {
     _contextSize: null,
     // Assistant — opt-in, OFF by default
     _assistantEnabled: false,
+    // Assistant chat history (persists across module reloads)
+    _assistantHistory: [],
+    // Assistant bubble colors (null = use CSS defaults)
+    _userBubbleColor: null,
+    _aiBubbleColor: null,
+    // GM Mode
+    _gmEnabled: false,
+    _gmPrompt: null, // null = use default
+    // Debug logging (verbose output to browser console)
+    _debug: false,
 };
+
+// =====================================================================
+// GM Mode — Default Injection Prompt
+// =====================================================================
+
+const DEFAULT_GM_PROMPT = `You are the Game Master and narrator of this story. You control the world, all non-player characters, the environment, and the consequences of actions. You do not control the player's character — their actions, thoughts, and decisions belong entirely to them.
+
+Narrate the world's response to the player's actions. NPCs act autonomously with their own motivations, knowledge, and limitations — they do not know things they haven't witnessed or been told. The world is dynamic and does not wait for the player.`;
 
 // Keys that are toggle-type (checkbox) settings
 const TOGGLE_KEYS = Object.keys(defaultSettings).filter(k => !k.startsWith('_'));
@@ -418,6 +453,9 @@ function reapplyActiveNeutralizations() {
     const settings = extension_settings[SETTINGS_KEY];
     if (!settings) return;
 
+    const activeKeys = [...ALL_NEUTRALIZE_KEYS].filter(k => settings[k]);
+    log.debug('Re-applying neutralizations:', activeKeys);
+
     for (const key of ALL_NEUTRALIZE_KEYS) {
         if (settings[key]) {
             neutralize(key);
@@ -432,6 +470,9 @@ function reapplyActiveNeutralizations() {
         }
         setPMFieldStates(newStates);
     }
+
+    // Re-apply GM Mode injection
+    applyGMMode();
 }
 
 function showRestoreNote(key) {
@@ -498,16 +539,19 @@ function loadSettings() {
 }
 
 function onToggleChange(key, value) {
+    log.state('Toggle', `${key} → ${value ? 'ON' : 'OFF'}`);
     extension_settings[SETTINGS_KEY][key] = value;
 
     if (ALL_NEUTRALIZE_KEYS.has(key)) {
         if (value) {
             preserveValue(key);
             neutralize(key);
+            log.debug(`Neutralized: ${key}`);
         } else {
             const restored = restoreValue(key);
             if (restored) {
                 showRestoreNote(key);
+                log.debug(`Restored: ${key}`);
             }
         }
     }
@@ -607,12 +651,14 @@ function initSystemPromptShortcut() {
     // When user types in Streamline's field, push to PM data model
     $streamlinePrompt.on('input', function () {
         writeMainPromptContent(this.value);
+        updateGMHint();
     });
 
     // When ST's quick-edit textarea changes (user edited it directly),
     // pull into our field
     $(document).on('input', '#main_prompt_quick_edit_textarea', function () {
         $streamlinePrompt.val(this.value);
+        updateGMHint();
     });
 
     // Sync when the Streamline drawer is opened
@@ -861,7 +907,7 @@ function reapplyPersistedContext() {
 
     // Only re-apply if preset/reload reverted to a low default
     if (current <= 4096 && saved > 4096) {
-        console.log(`[Streamline] Re-applying persisted context: ${saved} (was reset to ${current})`);
+        log.info(`Re-applying persisted context: ${saved} (was reset to ${current})`);
         writeSTContextSize(saved);
     }
 }
@@ -932,7 +978,7 @@ function detectModelContextSize() {
                     || modelInfo.max_context_length
                     || modelInfo.max_model_len;
                 if (ctx && ctx > 0) {
-                    console.log(`[Streamline] Detected context size from model_list: ${modelId} → ${ctx}`);
+                    log.debug(`Context from model_list: ${modelId} → ${ctx}`);
                     return ctx;
                 }
             }
@@ -942,15 +988,15 @@ function detectModelContextSize() {
         const modelLower = modelId.toLowerCase();
         for (const [pattern, ctx] of Object.entries(MODEL_CONTEXT_FALLBACKS)) {
             if (modelLower.includes(pattern.toLowerCase())) {
-                console.log(`[Streamline] Matched context size from fallback: ${modelId} → ${ctx} (pattern: ${pattern})`);
+                log.debug(`Context from fallback: ${modelId} → ${ctx} (pattern: ${pattern})`);
                 return ctx;
             }
         }
 
-        console.log(`[Streamline] No context size detected for model: ${modelId}`);
+        log.debug(`No context size detected for model: ${modelId}`);
         return null;
     } catch (e) {
-        console.warn('[Streamline] Error detecting model context:', e.message);
+        log.warn('Error detecting model context:', e.message);
         return null;
     }
 }
@@ -993,7 +1039,7 @@ function autoApplyModelContext() {
     if (current <= 4096) {
         writeSTContextSize(detected);
         updateContextDisplay();
-        console.log(`[Streamline] Auto-set context to ${detected} for ${modelName}`);
+        log.info(`Auto-set context to ${detected} for ${modelName}`);
 
         // Show brief notification
         const $display = $('#streamline_context_display');
@@ -1023,6 +1069,119 @@ function updateModelInfoDisplay(modelName, contextSize) {
 // =====================================================================
 // Self-Managed Defaults — Streaming
 // =====================================================================
+
+/**
+ * Apply a custom bubble color to the assistant chat via CSS custom properties.
+ * @param {'user'|'ai'} who - Which bubble to style
+ * @param {string|null} hexColor - Hex color or null to reset
+ */
+// =====================================================================
+// GM Mode — Injection Logic
+// =====================================================================
+
+/**
+ * Get the current GM prompt text (user-customized or default).
+ * @returns {string}
+ */
+function getGMPrompt() {
+    const settings = extension_settings[SETTINGS_KEY];
+    return settings?._gmPrompt || DEFAULT_GM_PROMPT;
+}
+
+/**
+ * Apply or remove the GM Mode injection based on current state.
+ * Uses setExtensionPrompt with BEFORE_PROMPT position so it layers
+ * underneath the user's system prompt (user prompt has the final word).
+ */
+function applyGMMode() {
+    const settings = extension_settings[SETTINGS_KEY];
+    const enabled = !!settings?._gmEnabled;
+
+    if (enabled) {
+        const prompt = getGMPrompt();
+        setExtensionPrompt(
+            GM_INJECTION_KEY,
+            prompt,
+            extension_prompt_types.BEFORE_PROMPT,
+            0,          // depth (not used for BEFORE_PROMPT)
+            false,      // scan (don't include in world info scan)
+            extension_prompt_roles.SYSTEM,
+        );
+        log.state('GM Mode', 'ON — injection active');
+    } else {
+        // Clear the injection by setting empty value
+        setExtensionPrompt(
+            GM_INJECTION_KEY,
+            '',
+            extension_prompt_types.NONE,
+            0,
+        );
+        log.state('GM Mode', 'OFF — injection cleared');
+    }
+}
+
+/**
+ * Analyze the user's system prompt and update the GM Mode hint.
+ * Shows contextual guidance:
+ * - Empty prompt → suggest enabling GM Mode
+ * - Chatbot-style prompt → suggest GM Mode to reframe
+ * - Already has GM/narrator framing → note GM Mode is redundant
+ */
+function updateGMHint() {
+    const $hint = $('#streamline_gm_detection_hint');
+    if (!$hint.length) return;
+
+    const prompt = readMainPromptContent().toLowerCase();
+    const gmEnabled = !!extension_settings[SETTINGS_KEY]?._gmEnabled;
+
+    // Keywords that indicate GM/narrator framing already exists
+    const gmKeywords = ['game master', 'narrator', 'narrate', 'dungeon master', 'you control the world',
+        'you are the gm', 'you are the dm', 'npc', 'player character', 'player\'s character',
+        'player agency', 'non-player character'];
+
+    // Keywords that suggest chatbot-style usage
+    const chatbotKeywords = ['you are a helpful', 'you are an ai', 'as an assistant',
+        'you are a chatbot', 'respond to the user', 'answer questions'];
+
+    const hasGMFraming = gmKeywords.some(kw => prompt.includes(kw));
+    const hasChatbotFraming = chatbotKeywords.some(kw => prompt.includes(kw));
+    const isEmpty = prompt.trim().length < 20;
+
+    if (isEmpty && !gmEnabled) {
+        $hint.html('<i class="fa-solid fa-lightbulb"></i> No system prompt detected. GM Mode will give the AI a foundation to work from — recommended for narrative RP.').show();
+    } else if (hasChatbotFraming && !gmEnabled) {
+        $hint.html('<i class="fa-solid fa-triangle-exclamation"></i> Your system prompt looks chatbot-oriented. Enable GM Mode to reframe the AI as a narrator/game master instead.').show();
+    } else if (hasGMFraming && gmEnabled) {
+        $hint.html('<i class="fa-solid fa-circle-check"></i> Your system prompt already has GM/narrator framing. GM Mode is active but redundant — you can disable it to save tokens.').show();
+    } else if (hasGMFraming && !gmEnabled) {
+        $hint.html('<i class="fa-solid fa-circle-check"></i> Your system prompt already establishes a GM/narrator role. GM Mode not needed.').show();
+    } else {
+        $hint.hide();
+    }
+}
+
+function applyBubbleColor(who, hexColor) {
+    const root = document.documentElement;
+    if (who === 'user') {
+        if (hexColor) {
+            root.style.setProperty('--streamline-user-bubble-bg', hexColor + '40'); // 25% opacity
+            root.style.setProperty('--streamline-user-bubble-border', hexColor + '66'); // 40% opacity
+            root.style.setProperty('--streamline-user-bubble-text', '');
+        } else {
+            root.style.removeProperty('--streamline-user-bubble-bg');
+            root.style.removeProperty('--streamline-user-bubble-border');
+            root.style.removeProperty('--streamline-user-bubble-text');
+        }
+    } else {
+        if (hexColor) {
+            root.style.setProperty('--streamline-ai-bubble-bg', hexColor + '20'); // 12% opacity
+            root.style.setProperty('--streamline-ai-bubble-text', '');
+        } else {
+            root.style.removeProperty('--streamline-ai-bubble-bg');
+            root.style.removeProperty('--streamline-ai-bubble-text');
+        }
+    }
+}
 
 function ensureStreamingDefault() {
     const settings = extension_settings[SETTINGS_KEY];
@@ -1059,6 +1218,7 @@ jQuery(async function () {
 
     // Quick action: Apply Narrative Defaults
     $('#streamline_apply_narrative_defaults').on('click', () => {
+        log.state('Quick Action', 'Apply Narrative Defaults');
         setAllToggles(true);
         disablePMFields();
 
@@ -1076,12 +1236,25 @@ jQuery(async function () {
             writeSTContextSize(detected || 128000);
             updateContextDisplay();
         }
+
+        // Enable GM Mode
+        extension_settings[SETTINGS_KEY]._gmEnabled = true;
+        $('#streamline_gm_enabled').prop('checked', true);
+        $('#streamline_gm_prompt_section').show();
+        applyGMMode();
     });
 
     // Quick action: Reset All
     $('#streamline_reset_all').on('click', () => {
+        log.state('Quick Action', 'Reset All');
         setAllToggles(false);
         restorePMFields();
+
+        // Disable GM Mode
+        extension_settings[SETTINGS_KEY]._gmEnabled = false;
+        $('#streamline_gm_enabled').prop('checked', false);
+        $('#streamline_gm_prompt_section').hide();
+        applyGMMode();
     });
 
     // Load saved settings and apply hide classes immediately
@@ -1111,31 +1284,134 @@ jQuery(async function () {
         saveSettingsDebounced();
     });
 
+    // Assistant color customization
+    $('#streamline_assistant_colors_toggle').on('click', function () {
+        $('#streamline_assistant_colors').toggle();
+    });
+
+    // Load saved colors
+    const savedUserColor = extension_settings[SETTINGS_KEY]._userBubbleColor;
+    const savedAiColor = extension_settings[SETTINGS_KEY]._aiBubbleColor;
+    if (savedUserColor) {
+        $('#streamline_user_bubble_color').val(savedUserColor);
+        applyBubbleColor('user', savedUserColor);
+    }
+    if (savedAiColor) {
+        $('#streamline_ai_bubble_color').val(savedAiColor);
+        applyBubbleColor('ai', savedAiColor);
+    }
+
+    $('#streamline_user_bubble_color').on('input', function () {
+        const color = $(this).val();
+        extension_settings[SETTINGS_KEY]._userBubbleColor = color;
+        applyBubbleColor('user', color);
+        saveSettingsDebounced();
+    });
+
+    $('#streamline_ai_bubble_color').on('input', function () {
+        const color = $(this).val();
+        extension_settings[SETTINGS_KEY]._aiBubbleColor = color;
+        applyBubbleColor('ai', color);
+        saveSettingsDebounced();
+    });
+
+    $('#streamline_user_bubble_reset').on('click', function () {
+        delete extension_settings[SETTINGS_KEY]._userBubbleColor;
+        $('#streamline_user_bubble_color').val('#5a8fd4');
+        applyBubbleColor('user', null);
+        saveSettingsDebounced();
+    });
+
+    $('#streamline_ai_bubble_reset').on('click', function () {
+        delete extension_settings[SETTINGS_KEY]._aiBubbleColor;
+        $('#streamline_ai_bubble_color').val('#888888');
+        applyBubbleColor('ai', null);
+        saveSettingsDebounced();
+    });
+
+    // ---- Debug Logging ----
+    $('#streamline_debug').prop('checked', !!extension_settings[SETTINGS_KEY]._debug);
+    $('#streamline_debug').on('change', function () {
+        extension_settings[SETTINGS_KEY]._debug = !!this.checked;
+        saveSettingsDebounced();
+        log.info(`Debug logging ${this.checked ? 'enabled' : 'disabled'}`);
+    });
+
+    // ---- GM Mode ----
+
+    const gmEnabled = !!extension_settings[SETTINGS_KEY]._gmEnabled;
+    $('#streamline_gm_enabled').prop('checked', gmEnabled);
+    if (gmEnabled) {
+        $('#streamline_gm_prompt_section').show();
+    }
+
+    // Load custom GM prompt or show default
+    const gmPromptText = extension_settings[SETTINGS_KEY]._gmPrompt || DEFAULT_GM_PROMPT;
+    $('#streamline_gm_prompt').val(gmPromptText);
+
+    // Apply GM mode on load (will inject or clear based on state)
+    applyGMMode();
+
+    $('#streamline_gm_enabled').on('change', function () {
+        const enabled = !!this.checked;
+        extension_settings[SETTINGS_KEY]._gmEnabled = enabled;
+        $('#streamline_gm_prompt_section').toggle(enabled);
+        applyGMMode();
+        updateGMHint();
+        saveSettingsDebounced();
+    });
+
+    $('#streamline_gm_prompt').on('input', function () {
+        const text = $(this).val().trim();
+        // Store custom prompt, or null if it matches the default
+        if (text === DEFAULT_GM_PROMPT || text === '') {
+            extension_settings[SETTINGS_KEY]._gmPrompt = null;
+        } else {
+            extension_settings[SETTINGS_KEY]._gmPrompt = text;
+        }
+        // Re-apply injection with new text
+        if (extension_settings[SETTINGS_KEY]._gmEnabled) {
+            applyGMMode();
+        }
+        saveSettingsDebounced();
+    });
+
+    $('#streamline_gm_reset_prompt').on('click', function () {
+        extension_settings[SETTINGS_KEY]._gmPrompt = null;
+        $('#streamline_gm_prompt').val(DEFAULT_GM_PROMPT);
+        if (extension_settings[SETTINGS_KEY]._gmEnabled) {
+            applyGMMode();
+        }
+        saveSettingsDebounced();
+    });
+
     // ---- Event-driven hooks (replace all setTimeout hacks) ----
 
     // SETTINGS_LOADED: ST has finished loading all settings.
     // Re-apply neutralizations that may have been overwritten by ST's load.
     eventSource.on(event_types.SETTINGS_LOADED, () => {
-        console.log('[Streamline] SETTINGS_LOADED — re-applying active neutralizations');
+        log.info('SETTINGS_LOADED — re-applying active neutralizations');
         reapplyActiveNeutralizations();
     });
 
     // OAI_PRESET_CHANGED_AFTER: A preset was loaded, which may have
     // re-enabled instruct mode, changed context template, etc.
     eventSource.on(event_types.OAI_PRESET_CHANGED_AFTER, () => {
-        console.log('[Streamline] OAI_PRESET_CHANGED_AFTER — re-applying active neutralizations');
+        log.info('OAI_PRESET_CHANGED_AFTER — re-applying active neutralizations');
         reapplyActiveNeutralizations();
     });
 
     // APP_READY: The app is fully initialized. Apply one-time defaults.
     eventSource.on(event_types.APP_READY, () => {
-        console.log('[Streamline] APP_READY — applying one-time defaults');
+        log.info('APP_READY — applying one-time defaults');
         ensureStreamingDefault();
         // Do an initial sync of simplified controls now that DOM is fully ready
         syncCreativityFromST();
         syncResponseLengthFromST();
         updateContextDisplay();
         syncSystemPromptFromPM();
+        // Update GM Mode hint now that prompt is loaded
+        updateGMHint();
         // Try to detect model context on startup (model_list may already be populated)
         autoApplyModelContext();
     });
@@ -1143,18 +1419,18 @@ jQuery(async function () {
     // Model-aware auto-configuration: when user changes model or API source,
     // detect the new model's context window and auto-apply if needed.
     eventSource.on(event_types.CHATCOMPLETION_MODEL_CHANGED, (newModel) => {
-        console.log(`[Streamline] Model changed to: ${newModel}`);
+        log.info(`Model changed to: ${newModel}`);
         // Small delay to let model_list update
         setTimeout(() => autoApplyModelContext(), 500);
     });
 
     eventSource.on(event_types.CHATCOMPLETION_SOURCE_CHANGED, (newSource) => {
-        console.log(`[Streamline] CC source changed to: ${newSource}`);
+        log.info(`CC source changed to: ${newSource}`);
         // Source change may clear model_list; context will update when model is selected
         updateModelInfoDisplay(null, null);
     });
 
-    console.log('[Streamline] Extension initialized, waiting for ST events.');
+    log.info('Extension initialized, waiting for ST events.');
 });
 
 export { MODULE_NAME };

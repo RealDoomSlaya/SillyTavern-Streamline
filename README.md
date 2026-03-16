@@ -200,8 +200,11 @@ Nothing is deleted from ST's core. Everything is CSS classes on `<body>` and JS 
 
 ### Tested Extensions
 - RPG Companion
-- Tracker
-- CharMemory
+- Pathweaver
+- EchoChamber
+- MemoryBooks
+- Bot Browser
+- World Info Recommender
 - Prompt Inspector
 - LALib
 - Guided Generations
@@ -218,12 +221,12 @@ Streamline operates at the **functionality layer** — it doesn't touch themes (
 | v0.2.0 | Deep Clean & Simplification — 17 toggles, simplified controls, system prompt shortcut |
 | v0.2.5 | Neutralization & PM Cleanup — three-tier neutralize, prompt manager field management |
 | v0.3.0 | Model Detection & Assistant — auto context detection, context presets, Streamline Assistant |
-| v0.4.0 | GM Mode — narrator/GM injection, smart prompt detection, chat color customization |
+| v0.4.0 | GM Mode & Assistant Knowledge Base — narrator/GM injection, smart prompt detection, chat color customization, curated knowledge base, structured logging, chat persistence |
 
 ### What's next
-- Knowledge base for the assistant (curated ST ecosystem info)
 - First-run experience / guided setup
 - Post-action summaries ("here's what Streamline just changed")
+- Knowledge base iterations based on user feedback
 
 ---
 
