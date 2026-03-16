@@ -43,6 +43,9 @@ const defaultSettings = {
     _contextSize: null,
     // Assistant — opt-in, OFF by default
     _assistantEnabled: false,
+    // Assistant bubble colors (null = use CSS defaults)
+    _userBubbleColor: null,
+    _aiBubbleColor: null,
 };
 
 // Keys that are toggle-type (checkbox) settings
@@ -1024,6 +1027,34 @@ function updateModelInfoDisplay(modelName, contextSize) {
 // Self-Managed Defaults — Streaming
 // =====================================================================
 
+/**
+ * Apply a custom bubble color to the assistant chat via CSS custom properties.
+ * @param {'user'|'ai'} who - Which bubble to style
+ * @param {string|null} hexColor - Hex color or null to reset
+ */
+function applyBubbleColor(who, hexColor) {
+    const root = document.documentElement;
+    if (who === 'user') {
+        if (hexColor) {
+            root.style.setProperty('--streamline-user-bubble-bg', hexColor + '40'); // 25% opacity
+            root.style.setProperty('--streamline-user-bubble-border', hexColor + '66'); // 40% opacity
+            root.style.setProperty('--streamline-user-bubble-text', '');
+        } else {
+            root.style.removeProperty('--streamline-user-bubble-bg');
+            root.style.removeProperty('--streamline-user-bubble-border');
+            root.style.removeProperty('--streamline-user-bubble-text');
+        }
+    } else {
+        if (hexColor) {
+            root.style.setProperty('--streamline-ai-bubble-bg', hexColor + '20'); // 12% opacity
+            root.style.setProperty('--streamline-ai-bubble-text', '');
+        } else {
+            root.style.removeProperty('--streamline-ai-bubble-bg');
+            root.style.removeProperty('--streamline-ai-bubble-text');
+        }
+    }
+}
+
 function ensureStreamingDefault() {
     const settings = extension_settings[SETTINGS_KEY];
 
@@ -1108,6 +1139,51 @@ jQuery(async function () {
         const enabled = !!this.checked;
         extension_settings[SETTINGS_KEY]._assistantEnabled = enabled;
         setAssistantEnabled(enabled);
+        saveSettingsDebounced();
+    });
+
+    // Assistant color customization
+    $('#streamline_assistant_colors_toggle').on('click', function () {
+        $('#streamline_assistant_colors').toggle();
+    });
+
+    // Load saved colors
+    const savedUserColor = extension_settings[SETTINGS_KEY]._userBubbleColor;
+    const savedAiColor = extension_settings[SETTINGS_KEY]._aiBubbleColor;
+    if (savedUserColor) {
+        $('#streamline_user_bubble_color').val(savedUserColor);
+        applyBubbleColor('user', savedUserColor);
+    }
+    if (savedAiColor) {
+        $('#streamline_ai_bubble_color').val(savedAiColor);
+        applyBubbleColor('ai', savedAiColor);
+    }
+
+    $('#streamline_user_bubble_color').on('input', function () {
+        const color = $(this).val();
+        extension_settings[SETTINGS_KEY]._userBubbleColor = color;
+        applyBubbleColor('user', color);
+        saveSettingsDebounced();
+    });
+
+    $('#streamline_ai_bubble_color').on('input', function () {
+        const color = $(this).val();
+        extension_settings[SETTINGS_KEY]._aiBubbleColor = color;
+        applyBubbleColor('ai', color);
+        saveSettingsDebounced();
+    });
+
+    $('#streamline_user_bubble_reset').on('click', function () {
+        delete extension_settings[SETTINGS_KEY]._userBubbleColor;
+        $('#streamline_user_bubble_color').val('#5a8fd4');
+        applyBubbleColor('user', null);
+        saveSettingsDebounced();
+    });
+
+    $('#streamline_ai_bubble_reset').on('click', function () {
+        delete extension_settings[SETTINGS_KEY]._aiBubbleColor;
+        $('#streamline_ai_bubble_color').val('#888888');
+        applyBubbleColor('ai', null);
         saveSettingsDebounced();
     });
 

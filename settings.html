@@ -239,6 +239,26 @@
                     Chat with an AI assistant that can help configure SillyTavern and its extensions.
                     Uses your current API connection and consumes tokens.
                 </small>
+
+                <div class="streamline-advanced-toggle" id="streamline_assistant_colors_toggle">
+                    <small><i class="fa-solid fa-palette"></i> Chat Colors</small>
+                </div>
+                <div class="streamline-advanced-content" id="streamline_assistant_colors" style="display: none;">
+                    <div class="streamline-color-row">
+                        <small>Your messages:</small>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <input type="color" id="streamline_user_bubble_color" value="#5a8fd4" title="User bubble accent color" class="streamline-color-picker">
+                            <div class="menu_button streamline-small-btn" id="streamline_user_bubble_reset" title="Reset to default">Reset</div>
+                        </div>
+                    </div>
+                    <div class="streamline-color-row">
+                        <small>AI messages:</small>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <input type="color" id="streamline_ai_bubble_color" value="#888888" title="AI bubble accent color" class="streamline-color-picker">
+                            <div class="menu_button streamline-small-btn" id="streamline_ai_bubble_reset" title="Reset to default">Reset</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

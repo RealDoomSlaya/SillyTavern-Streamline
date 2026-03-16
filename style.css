@@ -572,14 +572,17 @@ body.streamline--hide-group-chat #group-metadata-controls {
 }
 
 .streamline-assistant-msg-user {
-    background: var(--SmartThemeQuoteColor, #5a8fd4);
-    color: var(--SmartThemeBodyColor, #fff);
+    background: var(--streamline-user-bubble-bg, rgba(90, 143, 212, 0.25));
+    color: var(--streamline-user-bubble-text, var(--SmartThemeBodyColor, #ddd));
+    border: 1px solid var(--streamline-user-bubble-border, rgba(90, 143, 212, 0.4));
     align-self: flex-end;
     border-bottom-right-radius: 3px;
+    white-space: pre-wrap;
 }
 
 .streamline-assistant-msg-ai {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--streamline-ai-bubble-bg, rgba(255, 255, 255, 0.08));
+    color: var(--streamline-ai-bubble-text, var(--SmartThemeBodyColor, #ddd));
     align-self: flex-start;
     border-bottom-left-radius: 3px;
 }
@@ -636,4 +639,31 @@ body.streamline--hide-group-chat #group-metadata-controls {
 .streamline-assistant-send-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+}
+
+/* Color picker in settings */
+.streamline-color-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+}
+
+.streamline-color-picker {
+    width: 32px;
+    height: 28px;
+    padding: 1px;
+    border: 1px solid var(--SmartThemeBorderColor, #555);
+    border-radius: 4px;
+    background: transparent;
+    cursor: pointer;
+}
+
+.streamline-color-picker::-webkit-color-swatch-wrapper {
+    padding: 2px;
+}
+
+.streamline-color-picker::-webkit-color-swatch {
+    border: none;
+    border-radius: 2px;
 }

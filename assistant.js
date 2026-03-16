@@ -23,19 +23,31 @@ const ASSISTANT_SYSTEM_PROMPT = `You are the Streamline Assistant, a helpful AI 
 - You have access to information about the user's current setup (installed extensions, API connection, settings)
 - If web search is listed as enabled in your context, you have access to it — use it when users ask about current info, recent updates, or things beyond your training data
 
+## Streamline's philosophy (IMPORTANT — follow this when giving advice):
+- The system prompt is king. A well-written system prompt replaces 90% of what ST puts in separate panels and toggles. Perspective, tense, NPC behavior, content rules, formatting, dialogue style — all belong in the system prompt, NOT in scattered UI toggles.
+- Author's Note is unnecessary — the system prompt handles tone and pacing directly.
+- Instruct Mode and Context Templates are irrelevant for cloud Chat Completion APIs (Claude, Gemini, GPT, GLM, DeepSeek). Never suggest enabling these for cloud API users.
+- Character cards are CHARACTER profiles — protagonist personas, NPC definitions, world elements. They are NOT for system instructions.
+- The AI should act as a Game Master / narrator controlling the world and NPCs, NOT as a chatbot. The user plays their own character/persona and lives in the world.
+- Many default ST extensions (Summarize, Vector Storage) are legacy and have been superseded by better third-party alternatives. Don't recommend them as the best option without caveats.
+- If Streamline has hidden something, there's a reason. Don't suggest unhiding things unless the user specifically asks. The hidden features are legacy bloat for cloud API users.
+- Subtractive first: removing things is usually more helpful than adding things.
+
 ## How to help:
 - Explain what ST settings and toggles do in plain language
-- Help configure extensions based on what they're trying to accomplish
+- Help configure third-party extensions based on what the user is trying to accomplish
 - Answer questions about API connections, presets, prompt management, and character cards
 - Give advice on system prompts, lorebooks, and narrative RP workflows
 - If you can see an extension's settings panel, explain each field and recommend values
+- When recommending extensions, prefer modern third-party ones over legacy built-in ones
 
 ## Style:
 - Be concise and direct — users want answers, not essays
 - Use bullet points for multi-step instructions
 - If you don't know something specific, say so rather than guessing
 - You can help with general RP questions too, but your expertise is ST configuration
-- Keep formatting tight — avoid excessive blank lines between sections. Use single line breaks, not double.`;
+- Keep formatting tight — avoid excessive blank lines between sections. Use single line breaks, not double.
+- Do NOT use markdown tables — they don't render well in this chat. Use bullet points or short descriptions instead.`;
 
 // =====================================================================
 // Context Gathering
@@ -338,8 +350,9 @@ async function sendUserMessage() {
 
     const $messages = $('#streamline_assistant_messages');
 
-    // Add user message
-    $messages.append(`<div class="streamline-assistant-msg streamline-assistant-msg-user">${escapeHtml(text)}</div>`);
+    // Add user message (preserve line breaks)
+    const userHtml = escapeHtml(text).replace(/\n/g, '<br>');
+    $messages.append(`<div class="streamline-assistant-msg streamline-assistant-msg-user">${userHtml}</div>`);
 
     // Add pending AI message
     const $aiMsg = $(`<div class="streamline-assistant-msg streamline-assistant-msg-ai streamline-assistant-msg-pending"><i class="fa-solid fa-spinner fa-spin"></i> Thinking...</div>`);
@@ -413,19 +426,34 @@ function formatResponse(text) {
     // Basic markdown-ish formatting
     let html = escapeHtml(text);
 
-    // Headers: ## Header → bold text
+    // Headers: ## Header → bold text on its own line
     html = html.replace(/^#{1,3}\s+(.+)$/gm, '<strong>$1</strong>');
 
-    // Bold and code
+    // Bold, italic, and inline code
     html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
     // Horizontal rules
     html = html.replace(/^---+$/gm, '<hr style="border:0;border-top:1px solid var(--SmartThemeBorderColor,#444);margin:4px 0;">');
 
-    // List items: collect consecutive "- " lines into <ul>
+    // Strip markdown table rows (pipe-delimited) — convert to simple lines
+    // Header separator rows like |---|---|---| → remove entirely
+    html = html.replace(/^\|[-\s|:]+\|$/gm, '');
+    // Table rows like | cell | cell | → "cell — cell"
+    html = html.replace(/^\|(.+)\|$/gm, (_, row) => {
+        const cells = row.split('|').map(c => c.trim()).filter(c => c);
+        return cells.join(' — ');
+    });
+
+    // Numbered lists: "1. text" → <li> with numbers preserved
+    html = html.replace(/^(\d+)\.\s+(.+)$/gm, '<li><strong>$1.</strong> $2</li>');
+
+    // Unordered list items: "- text" → <li>
     html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
-    html = html.replace(/((?:<li>.*?<\/li>\n?)+)/g, '<ul style="margin:2px 0;padding-left:18px;">$1</ul>');
+
+    // Wrap consecutive <li> blocks in <ul>
+    html = html.replace(/((?:<li>.*?<\/li>\n?)+)/g, '<ul style="margin:2px 0;padding-left:18px;list-style:none;">$1</ul>');
 
     // Collapse 3+ newlines → 2, then 2 newlines → single <br> (paragraph break)
     html = html.replace(/\n{3,}/g, '\n\n');
